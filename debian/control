@@ -1,0 +1,18 @@
+Source: gemini-linux-kernel-3.18
+Section: kernel
+Priority: extra
+Maintainer: Carsten Boeving <carsten.boeving@whitedome.com.au>
+Build-Depends:
+Standards-Version: 3.9.8
+Vcs-Git: https://github.com/re4son/gemini-linux-kernel-3.18.git
+Homepage: https://www.kernel.org/
+
+Package: kali-gemini-kernel
+Architecture: arm64
+Multi-Arch: same
+Depends:
+Conflicts:
+Replaces:
+Recommends:
+Description: Kali Gemini Kernel
+ .

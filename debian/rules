@@ -1,0 +1,52 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# keep lintian happy:
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep:
+
+build-stamp:
+	(cd ..; mkdir KERNEL_OUT MODULES_OUT)
+	@echo configuring
+	make O=../KERNEL_OUT ARCH=arm64 kali_aeon6797_6m_n_halium_defconfig_2
+	@echo building kernel
+	make O=../KERNEL_OUT ARCH=arm64 CROSS_COMPILE=/usr/bin/aarch64-linux-gnu-
+	make O=../KERNEL_OUT ARCH=arm64 CROSS_COMPILE=/usr/bin/aarch64-linux-gnu- modules
+	make O=../KERNEL_OUT ARCH=arm64 CROSS_COMPILE=/usr/bin/aarch64-linux-gnu- INSTALL_MOD_PATH=../MODULES_OUT modules_install
+        rm ../MODULES_OUT/lib/modules/*/build
+        rm ../MODULES_OUT/lib/modules/*/source
+	@echo mkbootimg
+	(cd ..; mkbootimg --kernel KERNEL_OUT/arch/arm64/boot/Image.gz-dtb --ramdisk /usr/share/kernel/ramdisk.cpio.gz --base 0x40080000 --second_offset 0x00e80000 --cmdline "bootopt=64S3,32N2,64N2 log_buf_len=4M" --kernel_offset 0x00000000 --ramdisk_offset 0x04f80000 --tags_offset 0x03f80000 --pagesize 2048 -o linux-boot.img)
+	(cd ..; mkbootimg --kernel KERNEL_OUT/arch/arm64/boot/Image.gz-dtb --ramdisk /usr/share/kernel/ramdisk.cpio.gz --base 0x40080000 --second_offset 0x00e80000 --cmdline "bootopt=64S3,32N2,64N2 log_buf_len=4M stowaways_os=debian" --kernel_offset 0x00000000 --ramdisk_offset 0x04f80000 --tags_offset 0x03f80000 --pagesize 2048 -o linux-boot-stowaways-debian.img)
+	@echo done
+
+clean: checkdir
+	(cd ..; rm -rf KERNEL_OUT MODULES_OUT)
+
+binary-arch:
+	-rm -rf debian/tmp
+	install -p -d -o root -g root -m 755 debian/tmp
+	install -p -d -o root -g root -m 755 debian/tmp/DEBIAN
+	install -p -d -o root -g root -m 755 debian/tmp/usr/share/kernel
+	install -p    -o root -g root -m 644  ../linux-boot.img debian/tmp/usr/share/kernel/linux-boot.img
+	install -p    -o root -g root -m 644  ../linux-boot-stowaways-debian.img debian/tmp/usr/share/kernel/linux-boot-stowaways-debian.img
+	install -p    -o root -g root -m 755 debian/postinst debian/tmp/DEBIAN/
+	install -p    -o root -g root -m 755 ../MODULES_OUT/lib debian/tmp 
+	dpkg-gencontrol -DArchitecture=arm64
+	dpkg --build debian/tmp ..
+
+binary-indep:
+
+binary:         binary-arch binary-indep
+
+checkdir:
+	@test -f debian/rules
+
+checkroot: checkdir
+	@test 0 = `id -u` || { echo "Error: not super-user"; exit 1; }
+
+.PHONY: binary binary-arch binary-indep clean checkroot checkdir build build-arch build-indep
