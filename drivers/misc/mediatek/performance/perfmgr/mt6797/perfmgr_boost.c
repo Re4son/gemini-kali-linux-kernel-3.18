@@ -175,7 +175,7 @@ static ssize_t perfmgr_force_vr_write(struct file *filp, const char *ubuf,
 		else /* min */
 			perfmgr_scn_list[FORCELIMIT_TYPE_VR].data[i/2].min_core = data;
 
-			i++;
+		i++;
 	}
 
 	perfmgr_forcelimit_cpu_core(FORCELIMIT_TYPE_VR, CLUSTER_NUM, perfmgr_scn_list[FORCELIMIT_TYPE_VR].data);

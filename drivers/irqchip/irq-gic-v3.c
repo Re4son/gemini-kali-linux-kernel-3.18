@@ -338,9 +338,9 @@ static int gic_populate_rdist(void)
 			typer = gic_read_typer(ptr + GICR_TYPER);
 			if ((typer >> 32) == aff) {
 				gic_data_rdist_rd_base() = ptr;
-				pr_info("CPU%d: found redistributor %lx @%p\n",
-					smp_processor_id(),
-					mpidr, ptr);
+//				pr_info("CPU%d: found redistributor %lx @%p\n",
+//					smp_processor_id(),
+//					mpidr, ptr);
 				return 0;
 			}
 

@@ -582,7 +582,7 @@ HPS_END:
 				     str_target);
 			else {
 				hps_warn
-				    ("(0x%X)%s action end (%u)(%u)(%u) %s %s%s (%u)(%u)(%u)(%u) %s\n",
+				    ("(0x%X)%s action-end (%u)(%u)(%u) %s %s%s (%u)(%u)(%u)(%u) %s\n",
 				     ((hps_ctxt.hps_func_control << 12) | hps_sys.action_id),
 				     str_online, hps_ctxt.cur_loads,
 				     hps_ctxt.cur_tlp, hps_ctxt.cur_iowait, str_hvytsk,

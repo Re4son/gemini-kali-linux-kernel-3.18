@@ -986,7 +986,7 @@ int dcm_mcusys_sync_dcm(ENUM_MCUSYS_DCM on)
 
 int dcm_mcusys_mp2_sync_dcm(ENUM_MCUSYS_DCM on)
 {
-	dcm_info("%s(%d)\n", __func__, on);
+//	dcm_info("%s(%d)\n", __func__, on);
 
 	if (on == MCUSYS_DCM_ON) {
 

@@ -2367,7 +2367,7 @@ static ssize_t mcidle_state_write(struct file *filp,
 			mcidle_time_critera = param;
 
 		return count;
-	} else if (!kstrtoint(cmd_buf, 10, &param) == 1) {
+	} else if (!kstrtoint(cmd_buf, 10, &param)) {
 		idle_switch[IDLE_TYPE_MC] = param;
 
 		return count;
@@ -2497,7 +2497,7 @@ static ssize_t dpidle_state_write(struct file *filp,
 			dpidle_dump_log = param;
 
 		return count;
-	} else if (!kstrtoint(cmd_buf, 10, &param) == 1) {
+	} else if (!kstrtoint(cmd_buf, 10, &param)) {
 		idle_switch[IDLE_TYPE_DP] = param;
 
 		return count;
@@ -2636,7 +2636,7 @@ static ssize_t soidle3_state_write(struct file *filp,
 			idle_dbg("sodi3_flags = 0x%x\n", sodi3_flags);
 		}
 		return count;
-	} else if (!kstrtoint(cmd_buf, 10, &param) == 1) {
+	} else if (!kstrtoint(cmd_buf, 10, &param)) {
 		idle_switch[IDLE_TYPE_SO3] = param;
 		return count;
 	}
@@ -2762,7 +2762,7 @@ static ssize_t soidle_state_write(struct file *filp,
 			idle_dbg("sodi_flags = 0x%x\n", sodi_flags);
 		}
 		return count;
-	} else if (!kstrtoint(cmd_buf, 10, &param) == 1) {
+	} else if (!kstrtoint(cmd_buf, 10, &param)) {
 		idle_switch[IDLE_TYPE_SO] = param;
 		return count;
 	}
@@ -2844,7 +2844,7 @@ static ssize_t slidle_state_write(struct file *filp, const char __user *userbuf,
 			disable_slidle_by_bit(param);
 
 		return count;
-	} else if (!kstrtoint(userbuf, 10, &param) == 1) {
+	} else if (!kstrtoint(userbuf, 10, &param)) {
 		idle_switch[IDLE_TYPE_SL] = param;
 		return count;
 	}

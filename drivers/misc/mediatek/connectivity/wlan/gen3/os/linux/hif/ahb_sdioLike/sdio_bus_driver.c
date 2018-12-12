@@ -352,7 +352,7 @@ int ahb_sdio_disable_func(struct sdio_func *func)
     if (ret)
         goto err;
 
-	reg &= ~(1 << func->num);
+    reg &= ~(1 << func->num);
 
 
     sdio_f0_writeb(func, reg, SDIO_CCCR_IOEx, &ret);

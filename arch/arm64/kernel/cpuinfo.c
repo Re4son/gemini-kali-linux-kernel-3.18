@@ -57,18 +57,18 @@ static void update_cpu_features(struct cpuinfo_arm64 *info)
 	update_mixed_endian_el0_support(info);
 }
 
-static char *icache_policy_str[] = {
-	[ICACHE_POLICY_RESERVED] = "RESERVED/UNKNOWN",
-	[ICACHE_POLICY_AIVIVT] = "AIVIVT",
-	[ICACHE_POLICY_VIPT] = "VIPT",
-	[ICACHE_POLICY_PIPT] = "PIPT",
-};
+//static char *icache_policy_str[] = {
+//	[ICACHE_POLICY_RESERVED] = "RESERVED/UNKNOWN",
+//	[ICACHE_POLICY_AIVIVT] = "AIVIVT",
+//	[ICACHE_POLICY_VIPT] = "VIPT",
+//	[ICACHE_POLICY_PIPT] = "PIPT",
+//};
 
 unsigned long __icache_flags;
 
 static void cpuinfo_detect_icache_policy(struct cpuinfo_arm64 *info)
 {
-	unsigned int cpu = smp_processor_id();
+//	unsigned int cpu = smp_processor_id();
 	u32 l1ip = CTR_L1IP(info->reg_ctr);
 
 	if (l1ip != ICACHE_POLICY_PIPT) {
@@ -86,7 +86,7 @@ static void cpuinfo_detect_icache_policy(struct cpuinfo_arm64 *info)
 	if (l1ip == ICACHE_POLICY_AIVIVT)
 		set_bit(ICACHEF_AIVIVT, &__icache_flags);
 
-	pr_info("Detected %s I-cache on CPU%d\n", icache_policy_str[l1ip], cpu);
+//	pr_info("Detected %s I-cache on CPU%d\n", icache_policy_str[l1ip], cpu);
 }
 
 static int check_reg_mask(char *name, u64 mask, u64 boot, u64 cur, int cpu)
@@ -210,6 +210,7 @@ static void __cpuinfo_store_cpu(struct cpuinfo_arm64 *info)
 	cpuinfo_detect_icache_policy(info);
 
 	check_local_cpu_errata();
+	check_local_cpu_features();
 	update_cpu_features(info);
 }
 

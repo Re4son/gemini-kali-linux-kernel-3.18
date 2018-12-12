@@ -309,42 +309,42 @@ else
 
 int BigOCPSetTarget(int OCPMode, int Target)
 {
-int ret;
-ret = -1;
+	int ret;
+	ret = -1;
 
-if ((Target < 0) || (Target > 127000)) {
-	if (HW_API_RET_DEBUG_ON)
-		ocp_err("Target must be 0 ~ 127000 mW)\n");
+	if ((Target < 0) || (Target > 127000)) {
+		if (HW_API_RET_DEBUG_ON)
+			ocp_err("Target must be 0 ~ 127000 mW)\n");
 
-return -1;
-}
+		return -1;
+	}
 
-if (!((OCPMode == OCP_ALL) || (OCPMode == OCP_FPI) || (OCPMode == OCP_OCPI))) {
+	if (!((OCPMode == OCP_ALL) || (OCPMode == OCP_FPI) || (OCPMode == OCP_OCPI))) {
 		if (HW_API_RET_DEBUG_ON)
 			ocp_err("Invalid OCP Mode!\n");
 
-return -1;
-}
+		return -1;
+	}
 
-if (HW_API_DEBUG_ON)
-	ocp_info("Set Cluster 2 limit = %d mW\n", Target);
+	if (HW_API_DEBUG_ON)
+		ocp_info("Set Cluster 2 limit = %d mW\n", Target);
 
 #if defined(CONFIG_OCP_AEE_RR_REC) && !defined(EARLY_PORTING)
 	aee_rr_rec_ocp_2_target_limit(Target);
 #endif
 
-if ((cpu_online(8) == 0) && (cpu_online(9) == 0))
-	return -1;
+	if ((cpu_online(8) == 0) && (cpu_online(9) == 0))
+		return -1;
 
-spin_lock(&reset_lock);
-if (reset_flags == 0)
-	ret = mt_secure_call_ocp(MTK_SIP_KERNEL_BIGOCPSETTARGET, OCPMode, Target, 0);
-spin_unlock(&reset_lock);
+	spin_lock(&reset_lock);
+	if (reset_flags == 0)
+		ret = mt_secure_call_ocp(MTK_SIP_KERNEL_BIGOCPSETTARGET, OCPMode, Target, 0);
+	spin_unlock(&reset_lock);
 
-if (ret == 0)
-	return 0;
-else
-	return -1;
+	if (ret == 0)
+		return 0;
+	else
+		return -1;
 
 }
 
@@ -383,10 +383,10 @@ if (Units == OCP_MA) {
 		ret = mt_secure_call_ocp(MTK_SIP_KERNEL_BIGOCPENABLE0, OCPMode, ClkPctMin, FreqPctMin);
 	spin_unlock(&reset_lock);
 	if (ret == 0) {
-			ocp_opt.ocp_cluster2_enable = 1;
-			if (HW_API_DEBUG_ON)
-				ocp_info("Cluster 2 enable.\n");
-	return 0;
+		ocp_opt.ocp_cluster2_enable = 1;
+		if (HW_API_DEBUG_ON)
+			ocp_info("Cluster 2 enable.\n");
+		return 0;
 	}
 } else if (Units == OCP_MW) {
 	spin_lock(&reset_lock);
@@ -397,7 +397,7 @@ if (Units == OCP_MA) {
 		ocp_opt.ocp_cluster2_enable = 1;
 		if (HW_API_DEBUG_ON)
 			ocp_info("Cluster 2 enable.\n");
-	return 0;
+		return 0;
 	}
 } else {
 		if (HW_API_RET_DEBUG_ON)
@@ -536,29 +536,29 @@ if (EnDis == OCP_DISABLE) {
 	if ((cpu_online(8) == 0) && (cpu_online(9) == 0))
 		return -1;
 
-spin_lock(&reset_lock);
-if (reset_flags == 0)
-	ret = mt_secure_call_ocp(MTK_SIP_KERNEL_BIGOCPCAPTURE0, Edge, Count, Trig);
-spin_unlock(&reset_lock);
+	spin_lock(&reset_lock);
+	if (reset_flags == 0)
+		ret = mt_secure_call_ocp(MTK_SIP_KERNEL_BIGOCPCAPTURE0, Edge, Count, Trig);
+	spin_unlock(&reset_lock);
 
-if (ret == 0)
-	return 0;
-else
-	return -1;
+	if (ret == 0)
+		return 0;
+	else
+		return -1;
 
 }
 if (!((Edge == OCP_RISING) || (Edge == OCP_FALLING))) {
 	if (HW_API_RET_DEBUG_ON)
 		ocp_err("parameter OCP_RISING/OCP_FALLING must be 1/0\n");
 
-return -2;
+	return -2;
 }
 
 if ((Count < 0) || (Count > 1048575)) {
 	if (HW_API_RET_DEBUG_ON)
 		ocp_err("parameter Count must be 0 ~ 1048575\n");
 
-return -3;
+	return -3;
 }
 
 if (!((Trig == OCP_CAP_IMM) || (Trig == OCP_CAP_IRQ0) || (Trig == OCP_CAP_IRQ1)
@@ -566,28 +566,28 @@ if (!((Trig == OCP_CAP_IMM) || (Trig == OCP_CAP_IRQ0) || (Trig == OCP_CAP_IRQ1)
 	if (HW_API_RET_DEBUG_ON)
 		ocp_err("parameter OCP_CAP_IMM/OCP_CAP_IRQ0/OCP_CAP_IRQ1/OCP_CAP_EO/OCP_CAP_EI must be 15/1/2/3/4\n");
 
-return -4;
+	return -4;
 }
 
 if ((EnDis == OCP_DISABLE) || (EnDis == OCP_ENABLE)) {
 	if ((cpu_online(8) == 0) && (cpu_online(9) == 0))
 		return -1;
 
-spin_lock(&reset_lock);
-if (reset_flags == 0)
-	ret = mt_secure_call_ocp(MTK_SIP_KERNEL_BIGOCPCAPTURE1, Edge, Count, Trig);
-spin_unlock(&reset_lock);
+	spin_lock(&reset_lock);
+	if (reset_flags == 0)
+		ret = mt_secure_call_ocp(MTK_SIP_KERNEL_BIGOCPCAPTURE1, Edge, Count, Trig);
+	spin_unlock(&reset_lock);
 
-if (ret == 0)
-	return 0;
-else
-	return -1;
+	if (ret == 0)
+		return 0;
+	else
+		return -1;
 
 } else {
 	if (HW_API_RET_DEBUG_ON)
 		ocp_err("parameter EnDis must be 1/0\n");
 
-return -1;
+	return -1;
 }
 
 }
@@ -635,10 +635,10 @@ if (GET_BITS_VAL_OCP(0:0, Temp) == 1) {
 		*Leakage = 127999;
 
 
-if (ocp_opt.ocp_cluster2_enable == 0)
-	goto Label;
-if ((cpu_online(8) == 0) && (cpu_online(9) == 0))
-	goto Label;
+	if (ocp_opt.ocp_cluster2_enable == 0)
+		goto Label;
+	if ((cpu_online(8) == 0) && (cpu_online(9) == 0))
+		goto Label;
 
 	/* CapTotAct:  Q8.12 -> integer  */
 	spin_lock(&reset_lock);
@@ -653,14 +653,14 @@ if ((cpu_online(8) == 0) && (cpu_online(9) == 0))
 	if (HW_API_DEBUG_ON)
 		ocp_info("ocp: big total_pwr=%d Lk_pwr=%d CG=%d\n", *Total, *Leakage, *ClkPct);
 
-return 1;
+	return 1;
 } else {
 
 Label:
 	*Leakage = 0x0;
 	*Total = 0x0;
 	*ClkPct = 0x0;
-return 0;
+	return 0;
 }
 }
 
@@ -674,14 +674,14 @@ if (!((EnDis == OCP_DISABLE) || (EnDis == OCP_ENABLE))) {
 	if (HW_API_RET_DEBUG_ON)
 		ocp_err("parameter EnDis must be 1/0\n");
 
-return -1;
+	return -1;
 }
 
 if ((CGAvgSel < 0) || (CGAvgSel > 7)) {
 	if (HW_API_RET_DEBUG_ON)
 		ocp_err("parameter CGAvgSel must be 0 ~ 7\n");
 
-return -1;
+	return -1;
 }
 
 if ((cpu_online(8) == 0) && (cpu_online(9) == 0))
@@ -743,12 +743,12 @@ if (ocp_read_field(OCPAPBSTATUS01, 0:0) == 1) {
 	if (HW_API_DEBUG_ON)
 		ocp_info("TopRawLkg=%d, CPU0RawLkg=%d, CPU1RawLkg=%d\n", *TopRawLkg, *CPU0RawLkg, *CPU1RawLkg);
 
-return 1;
+	return 1;
 } else {
 	*TopRawLkg = 0;
 	*CPU0RawLkg = 0;
 	*CPU1RawLkg = 0;
-return 0;
+	return 0;
 }
 
 }
@@ -756,15 +756,15 @@ return 0;
 int BigOCPMAFAct(unsigned int *CapMAFAct)
 {
 
-if (ocp_read_field(OCPAPBSTATUS01, 0:0) == 1)
-	*CapMAFAct = (ocp_read_field(OCPAPBSTATUS03, 18:0) * 1000) >> 12; /* mA*/
-else
-	*CapMAFAct = 0x0;
+	if (ocp_read_field(OCPAPBSTATUS01, 0:0) == 1)
+		*CapMAFAct = (ocp_read_field(OCPAPBSTATUS03, 18:0) * 1000) >> 12; /* mA*/
+	else
+		*CapMAFAct = 0x0;
 
 	if (HW_API_DEBUG_ON)
 		ocp_info("ocp: big CapMAFAct=%d\n",  *CapMAFAct);
 
-return 0;
+	return 0;
 }
 
 
@@ -891,7 +891,7 @@ if (!((Cluster == OCP_LL) || (Cluster == OCP_L))) {
 	if (HW_API_RET_DEBUG_ON)
 		ocp_err("parameter Cluster must be 0/1");
 
-return -1;
+	return -1;
 }
 
 if (Cluster == OCP_LL) {
@@ -903,7 +903,7 @@ if (Cluster == OCP_LL) {
 		/* ocp_opt.ocp_cluster0_enable = 1; */
 		if (HW_API_DEBUG_ON)
 			ocp_info("Cluster 0 flag.\n");
-	return 0;
+		return 0;
 	}
 }
 if (Cluster == OCP_L) {
@@ -915,7 +915,7 @@ if (Cluster == OCP_L) {
 		/* ocp_opt.ocp_cluster1_enable = 1;*/
 		if (HW_API_DEBUG_ON)
 			ocp_info("Cluster 1 flag.\n");
-	return 0;
+		return 0;
 	}
 }
 
@@ -931,7 +931,7 @@ if (!((Cluster == OCP_LL) || (Cluster == OCP_L))) {
 	if (HW_API_RET_DEBUG_ON)
 		ocp_err("parameter Cluster OCP_LL/OCP_L must be 0/1\n");
 
-return -1;
+	return -1;
 }
 if (Cluster == OCP_LL) {
 	ocp_opt.ocp_cluster0_enable = 0;
@@ -957,20 +957,20 @@ if ((FreqMHz < 100) || (FreqMHz > 3000)) {
 	if (HW_API_RET_DEBUG_ON)
 		ocp_err("parameter FreqMHz must be 100 ~ 3000 Mhz\n");
 
-return -1;
+	return -1;
 }
 if ((VoltInmV < 600) || (VoltInmV > 1300)) {
 	if (HW_API_RET_DEBUG_ON)
 		ocp_err("parameter VoltInmV must be 600 ~ 1300 mV\n");
 
-return -1;
+	return -1;
 }
 
 if (!((Cluster == OCP_LL) || (Cluster == OCP_L))) {
 	if (HW_API_RET_DEBUG_ON)
 		ocp_err("parameter Cluster OCP_LL/OCP_L must be 0/1\n");
 
-return -1;
+	return -1;
 }
 if (HW_API_DEBUG_ON)
 	ocp_info("Set Cluster %d Freq= %d Mhz, Volt= %d mV\n", Cluster, FreqMHz, VoltInmV);
@@ -2823,11 +2823,11 @@ if (Reg_Debug_on) {
 	for (i = 0; i < 524 ; i += 4)
 		seq_printf(m, "Addr: 0x%x = %x\n", (MP0_OCP_IRQSTATE + i), ocp_read(MP0_OCP_IRQSTATE + i));
 
-		seq_printf(m, "Addr: 0x102217FC = %x\n", ocp_read(MP0_OCP_GENERAL_CTRL));
-		seq_printf(m, "Addr: 0x10221250 = %x\n", ocp_read(MP0_OCP_DBG_ACT_L));
-		seq_printf(m, "Addr: 0x10221254 = %x\n", ocp_read(MP0_OCP_DBG_ACT_H));
-		seq_printf(m, "Addr: 0x10221260 = %x\n", ocp_read(MP0_OCP_DBG_LKG_L));
-		seq_printf(m, "Addr: 0x10221264 = %x\n", ocp_read(MP0_OCP_DBG_LKG_H));
+	seq_printf(m, "Addr: 0x102217FC = %x\n", ocp_read(MP0_OCP_GENERAL_CTRL));
+	seq_printf(m, "Addr: 0x10221250 = %x\n", ocp_read(MP0_OCP_DBG_ACT_L));
+	seq_printf(m, "Addr: 0x10221254 = %x\n", ocp_read(MP0_OCP_DBG_ACT_H));
+	seq_printf(m, "Addr: 0x10221260 = %x\n", ocp_read(MP0_OCP_DBG_LKG_L));
+	seq_printf(m, "Addr: 0x10221264 = %x\n", ocp_read(MP0_OCP_DBG_LKG_H));
 }
 return 0;
 }
@@ -2972,11 +2972,11 @@ if (Reg_Debug_on) {
 	for (i = 0; i < 524; i += 4)
 		seq_printf(m, "Addr: 0x%x = %x\n", (MP1_OCP_IRQSTATE + i), ocp_read(MP1_OCP_IRQSTATE + i));
 
-		seq_printf(m, "Addr: 0x102237FC = %x\n", ocp_read(MP1_OCP_GENERAL_CTRL));
-		seq_printf(m, "Addr: 0x10223250 = %x\n", ocp_read(MP1_OCP_DBG_ACT_L));
-		seq_printf(m, "Addr: 0x10223254 = %x\n", ocp_read(MP1_OCP_DBG_ACT_H));
-		seq_printf(m, "Addr: 0x10223260 = %x\n", ocp_read(MP1_OCP_DBG_LKG_L));
-		seq_printf(m, "Addr: 0x10223264 = %x\n", ocp_read(MP1_OCP_DBG_LKG_H));
+	seq_printf(m, "Addr: 0x102237FC = %x\n", ocp_read(MP1_OCP_GENERAL_CTRL));
+	seq_printf(m, "Addr: 0x10223250 = %x\n", ocp_read(MP1_OCP_DBG_ACT_L));
+	seq_printf(m, "Addr: 0x10223254 = %x\n", ocp_read(MP1_OCP_DBG_ACT_H));
+	seq_printf(m, "Addr: 0x10223260 = %x\n", ocp_read(MP1_OCP_DBG_LKG_L));
+	seq_printf(m, "Addr: 0x10223264 = %x\n", ocp_read(MP1_OCP_DBG_LKG_H));
 }
 
 return 0;

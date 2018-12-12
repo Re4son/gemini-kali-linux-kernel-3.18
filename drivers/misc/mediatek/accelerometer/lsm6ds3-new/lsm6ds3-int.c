@@ -454,19 +454,19 @@ static int lsm6ds3_i2c_write(struct lsm6ds3_i2c_data *cdata, u8 reg_addr, int le
 		u8 buf[8];
 		int num, idx;
 
-	    num = 0;
-	    buf[num++] = reg_addr;
-    	for (idx = 0; idx < len; idx++)
-        	buf[num++] = data[idx];
+		num = 0;
+		buf[num++] = reg_addr;
+		for (idx = 0; idx < len; idx++)
+			buf[num++] = data[idx];
 		mutex_lock(&lsm6ds3_mutex);
-	    ret = i2c_master_send(client, buf, num);
-	    mutex_unlock(&lsm6ds3_mutex);
-    	if (ret < 0) {
-        	GSE_ERR("send command error!!\n");
-        	return -EFAULT;
-    	} else {
-	        ret = 0;    /*no error*/
-    	}
+		ret = i2c_master_send(client, buf, num);
+		mutex_unlock(&lsm6ds3_mutex);
+		if (ret < 0) {
+			GSE_ERR("send command error!!\n");
+			return -EFAULT;
+		} else {
+			ret = 0;    /*no error*/
+		}
 	}
 
 	return ret;

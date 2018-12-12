@@ -167,7 +167,10 @@ static bool pmic_pre_wdt_reset_state;
 
 int pmic_force_vcore_pwm(bool enable)
 {
-	int val, val1, val2, ret;
+	int val = 0;
+	int val1 = 0;
+	int val2 = 0;
+	int ret;
 
 	ret = pmic_read_interface_nolock(0x44e, &val, 0xFFFF, 0x0);
 	ret = pmic_read_interface_nolock(0x450, &val1, 0xFFFF, 0x0);

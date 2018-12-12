@@ -185,7 +185,8 @@ asmlinkage void secondary_start_kernel(void)
 	aee_rr_rec_hotplug_footprint(cpu, 2);
 
 	set_my_cpu_offset(per_cpu_offset(smp_processor_id()));
-	printk("CPU%u: Booted secondary processor\n", cpu);
+
+//	printk("CPU%u: Booted secondary processor\n", cpu);
 
 	aee_rr_rec_hotplug_footprint(cpu, 3);
 

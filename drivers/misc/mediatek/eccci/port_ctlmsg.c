@@ -97,7 +97,7 @@ static void control_msg_handler(struct ccci_port *port, struct sk_buff *skb)
 	switch (ccci_h->data[1]) {
 	case MD_INIT_START_BOOT: /*MD_INIT_START_BOOT == MD_NORMAL_BOOT == 0*/
 		ret = normal_msg_handler(port, skb);
-	break;
+		break;
 	case MD_EX:
 	case MD_EX_REC_OK:
 	case MD_EX_PASS:
@@ -109,8 +109,10 @@ static void control_msg_handler(struct ccci_port *port, struct sk_buff *skb)
 	case C2K_STATUS_QUERY_MSG:
 	case C2K_CCISM_SHM_INIT_ACK:
 	case C2K_FLOW_CTRL_MSG:
-	if (port->md_id == MD_SYS3)
-		ret = c2k_msg_handler(port, skb);
+		if (port->md_id == MD_SYS3)
+		{
+			ret = c2k_msg_handler(port, skb);
+		}
 		break;
 	default:
 		CCCI_ERROR_LOG(port->md_id, KERN, "receive unknown data from CCCI_CONTROL_RX = %d\n", ccci_h->data[1]);
