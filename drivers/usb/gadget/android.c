@@ -45,6 +45,9 @@
 
 #include "f_accessory.c"
 #include "f_mass_storage.h"
+#include "f_hid.h"
+#include "f_hid_android_keyboard.c"
+#include "f_hid_android_mouse.c"
 #include "f_mtp.c"
 #include "f_eem.c"
 #include "f_rndis.c"
@@ -280,7 +283,9 @@ static void android_disable(struct android_dev *dev)
 
 /*-------------------------------------------------------------------------*/
 /* Supported functions initialization */
-#ifdef CONFIG_MTK_KERNEL_POWER_OFF_CHARGING
+
+/*#ifdef CONFIG_MTK_KERNEL_POWER_OFF_CHARGING*/
+
 static int hid_function_init(struct android_usb_function *f,
 		struct usb_composite_dev *cdev)
 {
@@ -299,9 +304,27 @@ static struct android_usb_function hid_function = {
 	.name		= "hid",
 	.init		= hid_function_init,
 	.cleanup	= hid_function_cleanup,
-	.bind_config	= hid_function_bind_config,
+	.bind_config	= hid_function_bind_kb_config,
 };
-#endif
+/*#endif*/
+
+static int hid_function_bind_kb_config(struct android_usb_function *f, struct usb_configuration *c)
+{
+	int ret;
+	printk(KERN_INFO "hid keyboard\n");
+	ret = hidg_bind_config(c, &ghid_device_android_keyboard, 0);
+	if (ret) {
+		pr_info("%s: hid_function_bind_config keyboard failed: %d\n", __func__, ret);
+		return ret;
+	}
+	printk(KERN_INFO "hid mouse\n");
+	ret = hidg_bind_config(c, &ghid_device_android_mouse, 1);
+	if (ret) {
+		pr_info("%s: hid_function_bind_config mouse failed: %d\n", __func__, ret);
+		return ret;
+	}
+	return 0;
+}
 
 struct functionfs_config {
 	bool opened;
@@ -1723,6 +1746,7 @@ static struct android_usb_function midi_function = {
 #endif
 
 static struct android_usb_function *supported_functions[] = {
+        &hid_function,
 	&ffs_function,
 	&mbim_function,
 	&acm_function,
@@ -1920,8 +1944,8 @@ functions_store(struct device *pdev, struct device_attribute *attr,
 	char buf[256], *b;
 	char aliases[256], *a;
 	int err;
-	int is_ffs;
 	int ffs_enabled = 0;
+        int hid_enabled = 0;
 
 	mutex_lock(&dev->mutex);
 
@@ -1952,34 +1976,45 @@ functions_store(struct device *pdev, struct device_attribute *attr,
 		if (!name)
 			continue;
 
-		is_ffs = 0;
 		strlcpy(aliases, dev->ffs_aliases, sizeof(aliases));
 		a = aliases;
 
 		while (a) {
 			char *alias = strsep(&a, ",");
 			if (alias && !strcmp(name, alias)) {
-				is_ffs = 1;
+				name = "ffs";
 				break;
 			}
 		}
-
-		if (is_ffs) {
-			if (ffs_enabled)
+			if (ffs_enabled && !strcmp(name, "ffs"))
 				continue;
-			err = android_enable_function(dev, "ffs");
-			if (err)
-				pr_err("android_usb: Cannot enable ffs (%d)",
-									err);
-			else
-				ffs_enabled = 1;
-			continue;
-		}
+
+			if (hid_enabled && !strcmp(name, "hid"))
+			        continue;
 
 		err = android_enable_function(dev, name);
+			if (err) {
+				pr_err("android_usb: Cannot enable '%s' (%d)",
+							name, err);
+				continue;
+			}
+
+			if (!strcmp(name, "ffs"))
+				ffs_enabled = 1;
+
+			if (!strcmp(name, "hid"))
+				hid_enabled = 1;
+		}
+
+		/* Always enable HID gadget function. */
+		if (!hid_enabled) {
+			name = "hid";
+			err = android_enable_function(dev, name);
 		if (err)
 			pr_err("android_usb: Cannot enable '%s' (%d)",
 							   name, err);
+			else
+				hid_enabled = 1;
 	}
 
 	mutex_unlock(&dev->mutex);
