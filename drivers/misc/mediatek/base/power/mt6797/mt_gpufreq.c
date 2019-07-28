@@ -1,8 +1,14 @@
 /*
+ * Copyright (C) 2017 MediaTek Inc.
+ *
  * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
  */
 
 #include <linux/kernel.h>
@@ -34,7 +40,7 @@
 #include <linux/of_address.h>
 #endif
 
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 
 #include "mt_clkmgr.h"
 #include "mt_cpufreq.h"
@@ -1504,7 +1510,13 @@ static unsigned int mt_gpufreq_dds_calc(unsigned int khz, enum post_div_enum pos
 
 static void gpu_dvfs_switch_to_parkingpll(bool on)
 {
-	clk_prepare_enable(mt_gpufreq_clk->clk_mux);
+	int ret;
+
+	ret = clk_prepare_enable(mt_gpufreq_clk->clk_mux);
+	if (ret) {
+		gpufreq_err("failed to enable clk: %d\n", ret);
+		return;
+	}
 	clk_set_parent(mt_gpufreq_clk->clk_mux,
 			(on) ? mt_gpufreq_clk->clk_sub_parent : mt_gpufreq_clk->clk_main_parent);
 	clk_disable_unprepare(mt_gpufreq_clk->clk_mux);
@@ -3123,7 +3135,7 @@ static ssize_t mt_gpufreq_debug_proc_write(struct file *file, const char __user 
 {
 	int debug = 0;
 
-	if (kstrtoint(buffer, 0, &debug) == 0) {
+	if (kstrtoint_from_user(buffer, count, 0, &debug) == 0) {
 		if (debug == 0)
 			mt_gpufreq_debug = 0;
 		else if (debug == 1)
@@ -3157,7 +3169,7 @@ static ssize_t mt_gpufreq_limited_oc_ignore_proc_write(struct file *file,
 {
 	unsigned int ignore = 0;
 
-	if (kstrtouint(buffer, 0, &ignore) == 0) {
+	if (kstrtouint_from_user(buffer, count, 0, &ignore) == 0) {
 		if (ignore == 1)
 			g_limited_oc_ignore_state = true;
 		else if (ignore == 0)
@@ -3193,7 +3205,7 @@ static ssize_t mt_gpufreq_limited_low_batt_volume_ignore_proc_write(struct file 
 {
 	unsigned int ignore = 0;
 
-	if (kstrtouint(buffer, 0, &ignore) == 0) {
+	if (kstrtouint_from_user(buffer, count, 0, &ignore) == 0) {
 		if (ignore == 1)
 			g_limited_low_batt_volume_ignore_state = true;
 		else if (ignore == 0)
@@ -3229,7 +3241,7 @@ static ssize_t mt_gpufreq_limited_low_batt_volt_ignore_proc_write(struct file *f
 {
 	unsigned int ignore = 0;
 
-	if (kstrtouint(buffer, 0, &ignore) == 0) {
+	if (kstrtouint_from_user(buffer, count, 0, &ignore) == 0) {
 		if (ignore == 1)
 			g_limited_low_batt_volt_ignore_state = true;
 		else if (ignore == 0)
@@ -3264,7 +3276,7 @@ static ssize_t mt_gpufreq_limited_thermal_ignore_proc_write(struct file *file,
 {
 	unsigned int ignore = 0;
 
-	if (kstrtouint(buffer, 0, &ignore) == 0) {
+	if (kstrtouint_from_user(buffer, count, 0, &ignore) == 0) {
 		if (ignore == 1)
 			g_limited_thermal_ignore_state = true;
 		else if (ignore == 0)
@@ -3299,7 +3311,7 @@ static ssize_t mt_gpufreq_limited_pbm_ignore_proc_write(struct file *file,
 {
 	unsigned int ignore = 0;
 
-	if (kstrtouint(buffer, 0, &ignore) == 0) {
+	if (kstrtouint_from_user(buffer, count, 0, &ignore) == 0) {
 		if (ignore == 1)
 			g_limited_pbm_ignore_state = true;
 		else if (ignore == 0)
@@ -3335,7 +3347,7 @@ static ssize_t mt_gpufreq_limited_power_proc_write(struct file *file,
 {
 	unsigned int power = 0;
 
-	if (kstrtouint(buffer, 0, &power) == 0)
+	if (kstrtouint_from_user(buffer, count, 0, &power) == 0)
 		mt_gpufreq_thermal_protect(power);
 	else
 		gpufreq_warn("bad argument!! please provide the maximum limited power\n");
@@ -3363,7 +3375,7 @@ static ssize_t mt_gpufreq_limited_by_pbm_proc_write(struct file *file, const cha
 {
 	unsigned int power = 0;
 
-	if (kstrtouint(buffer, 0, &power) == 0)
+	if (kstrtouint_from_user(buffer, count, 0, &power) == 0)
 		mt_gpufreq_set_power_limit_by_pbm(power);
 	else
 		gpufreq_warn("bad argument!! please provide the maximum limited power\n");
@@ -3393,7 +3405,7 @@ static ssize_t mt_gpufreq_state_proc_write(struct file *file,
 {
 	int enabled = 0;
 
-	if (kstrtoint(buffer, 0, &enabled) == 0) {
+	if (kstrtoint_from_user(buffer, count, 0, &enabled) == 0) {
 		if (enabled == 1) {
 			mt_gpufreq_keep_max_frequency_state = false;
 			mt_gpufreq_state_set(1);
@@ -3471,7 +3483,7 @@ static ssize_t mt_gpufreq_opp_freq_proc_write(struct file *file, const char __us
 	int fixed_freq = 0;
 	int found = 0;
 
-	if (kstrtoint(buffer, 0, &fixed_freq) == 0) {
+	if (kstrtoint_from_user(buffer, count, 0, &fixed_freq) == 0) {
 		if (fixed_freq == 0) {
 			mt_gpufreq_keep_opp_frequency_state = false;
 #ifdef MTK_GPU_SPM
@@ -3530,7 +3542,7 @@ static ssize_t mt_gpufreq_opp_max_freq_proc_write(struct file *file, const char 
 	int max_freq = 0;
 	int found = 0;
 
-	if (kstrtoint(buffer, 0, &max_freq) == 0) {
+	if (kstrtoint_from_user(buffer, count, 0, &max_freq) == 0) {
 		if (max_freq == 0) {
 			mt_gpufreq_opp_max_frequency_state = false;
 		} else {
@@ -3606,7 +3618,7 @@ static ssize_t mt_gpufreq_volt_enable_proc_write(struct file *file, const char _
 {
 	int enable = 0;
 
-	if (kstrtoint(buffer, 0, &enable) == 0) {
+	if (kstrtoint_from_user(buffer, count, 0, &enable) == 0) {
 		if (enable == 0) {
 			mt_gpufreq_voltage_enable_set(0);
 			mt_gpufreq_volt_enable = false;
@@ -3690,10 +3702,24 @@ static void _mt_gpufreq_fixed_volt(int fixed_volt)
 static ssize_t mt_gpufreq_fixed_freq_volt_proc_write(struct file *file, const char __user *buffer,
 						     size_t count, loff_t *data)
 {
-	int fixed_freq = 0;
-	int fixed_volt = 0;
+	char buf[64];
+	unsigned int len = 0;
+	int ret = -EFAULT;
+	unsigned int fixed_freq = 0;
+	unsigned int fixed_volt = 0;
 
-	if (sscanf(buffer, "%d %d", &fixed_freq, &fixed_volt) == 2) {
+	if (count == 0)
+		return -EINVAL;
+
+	len = (count < (sizeof(buf) - 1)) ? count : (sizeof(buf) - 1);
+
+	if (copy_from_user(buf, buffer, len))
+		goto out;
+
+	buf[len] = '\0';
+
+	if (sscanf(buf, "%d %d", &fixed_freq, &fixed_volt) == 2) {
+		ret = 0;
 		if ((fixed_freq == 0) && (fixed_volt == 0)) {
 			mt_gpufreq_fixed_freq_volt_state = false;
 			mt_gpufreq_fixed_frequency = 0;
@@ -3735,7 +3761,8 @@ static ssize_t mt_gpufreq_fixed_freq_volt_proc_write(struct file *file, const ch
 	} else
 		gpufreq_warn("bad argument!! should be [enable fixed_freq fixed_volt]\n");
 
-	return count;
+out:
+	return (ret < 0) ? ret : count;
 }
 
 #ifdef MT_GPUFREQ_INPUT_BOOST
@@ -3760,7 +3787,7 @@ static ssize_t mt_gpufreq_input_boost_proc_write(struct file *file, const char _
 {
 	int debug = 0;
 
-	if (kstrtoint(buffer, 0, &debug) == 0) {
+	if (kstrtoint_from_user(buffer, count, 0, &debug) == 0) {
 		if (debug == 0)
 			mt_gpufreq_input_boost_state = 0;
 		else if (debug == 1)
@@ -3794,7 +3821,7 @@ static ssize_t mt_gpufreq_lpt_enable_proc_write(struct file *file, const char __
 {
 	int enable = 0;
 
-	if (kstrtoint(buffer, 0, &enable) == 0) {
+	if (kstrtoint_from_user(buffer, count, 0, &enable) == 0) {
 		if (enable == 0)
 			mt_gpufreq_low_power_test_enable = false;
 		else if (enable == 1)

@@ -49,14 +49,14 @@ static void *ext4_follow_link(struct dentry *dentry, struct nameidata *nd)
 		cpage = read_mapping_page(inode->i_mapping, 0, NULL);
 		if (IS_ERR(cpage))
 			return cpage;
-		caddr = kmap(cpage);
+		caddr = page_address(cpage);
 		caddr[size] = 0;
 	}
 
 	/* Symlink is encrypted */
 	sd = (struct ext4_encrypted_symlink_data *)caddr;
 	cstr.name = sd->encrypted_path;
-	cstr.len  = le16_to_cpu(sd->len);
+	cstr.len  = le32_to_cpu(sd->len);
 	if ((cstr.len +
 	     sizeof(struct ext4_encrypted_symlink_data) - 1) >
 	    max_size) {
@@ -80,16 +80,12 @@ static void *ext4_follow_link(struct dentry *dentry, struct nameidata *nd)
 	if (res <= plen)
 		paddr[res] = '\0';
 	nd_set_link(nd, paddr);
-	if (cpage) {
-		kunmap(cpage);
+	if (cpage)
 		page_cache_release(cpage);
-	}
 	return NULL;
 errout:
-	if (cpage) {
-		kunmap(cpage);
+	if (cpage)
 		page_cache_release(cpage);
-	}
 	kfree(paddr);
 	return ERR_PTR(res);
 }

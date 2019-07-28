@@ -1313,64 +1313,9 @@ static struct proc_dir_entry *rndis_connect_state [RNDIS_MAX_CONFIGS];
 
 #endif /* CONFIG_USB_GADGET_DEBUG_FILES */
 
-static int rndis_test_proc_show(struct seq_file *m, void *v)
-{
-	seq_printf(m,
-			"[RNDIS] rx_in %lu\n"
-		    "rx_out %lu\n"
-			"rx_nomem %lu\n"
-			"rx_error %lu\n"
-			"tx_in %lu\n"
-			"tx_out %lu\n"
-			"tx_busy %lu\n"
-			"tx_complete %lu\n"
-			"last_msg_id: 0x%x\n"
-			"last_resp_id: 0x%x\n"
-		    "RNDIS reset cnt: %lu\n"
-			"queue stopped? %d\n",
-			rndis_test_rx_usb_in, rndis_test_rx_net_out,
-			rndis_test_rx_nomem, rndis_test_rx_error,
-			rndis_test_tx_net_in, rndis_test_tx_usb_out,
-			rndis_test_tx_busy , rndis_test_tx_complete,
-			rndis_test_last_msg_id, rndis_test_last_resp_id,
-			rndis_test_reset_msg_cnt, netif_queue_stopped(rndis_per_dev_params[0].dev));
-
-	return 0;
-}
-
-static int rndis_test_proc_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, rndis_test_proc_show, inode->i_private);
-}
-
-static ssize_t rndis_test_proc_write(struct file *file, const char __user *buf, size_t length, loff_t *ppos)
-{
-	char msg[32];
-
-	if (length >= sizeof(msg))
-		return -EINVAL;
-	if (copy_from_user(msg, buf, length))
-		return -EFAULT;
-
-	msg[length] = 0;
-
-	return length;
-}
-static const struct file_operations rndis_test_proc_fops = {
-	.owner		= THIS_MODULE,
-	.open		= rndis_test_proc_open,
-	.write = rndis_test_proc_write,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-
-};
-static struct proc_dir_entry *rndis_test_proc;
 int rndis_init(void)
 {
 	u8 i;
-
-	rndis_test_proc = proc_create("rndis_test_proc", 0444, NULL,
-			&rndis_test_proc_fops);
 
 	for (i = 0; i < RNDIS_MAX_CONFIGS; i++) {
 #ifdef	CONFIG_USB_GADGET_DEBUG_FILES
@@ -1403,7 +1348,6 @@ int rndis_init(void)
 
 void rndis_exit(void)
 {
-	remove_proc_entry("rndis_test_proc", NULL);
 #ifdef CONFIG_USB_GADGET_DEBUG_FILES
 	u8 i;
 	char name[20];

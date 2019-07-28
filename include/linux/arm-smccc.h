@@ -24,8 +24,8 @@
  * http://infocenter.arm.com/help/topic/com.arm.doc.den0028a/index.html
  */
 
-#define ARM_SMCCC_STD_CALL	        _AC(0, U)
-#define ARM_SMCCC_FAST_CALL	        _AC(1, U)
+#define ARM_SMCCC_STD_CALL		_AC(0, U)
+#define ARM_SMCCC_FAST_CALL		_AC(1, U)
 #define ARM_SMCCC_TYPE_SHIFT		31
 
 #define ARM_SMCCC_SMC_32		0
@@ -78,7 +78,6 @@
 	ARM_SMCCC_CALL_VAL(ARM_SMCCC_FAST_CALL,				\
 			   ARM_SMCCC_SMC_32,				\
 			   0, 0x8000)
-
 
 /**
  * struct arm_smccc_res - Result from SMC/HVC call
@@ -263,3 +262,4 @@ asmlinkage void arm_smccc_hvc(unsigned long a0, unsigned long a1,
 #define arm_smccc_1_1_hvc(...)	__arm_smccc_1_1(SMCCC_HVC_INST, __VA_ARGS__)
 
 #endif /*__LINUX_ARM_SMCCC_H*/
+

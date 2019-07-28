@@ -31,7 +31,7 @@ int m_SEEPROM_WriteMax_Length	= 256;
 int m_SEEPROM_Align_Sector	= 4096;
 int m_SEEPROM_ID;
 
-#if 0//I2C_DMA_SUPPORT
+#if I2C_DMA_SUPPORT
 #include <linux/dma-mapping.h>
 extern uint8_t *gpDMABuf_va;
 extern dma_addr_t gpDMABuf_pa;
@@ -42,6 +42,9 @@ extern dma_addr_t wrDMABuf_pa;
 int (*ds16_seeprom_erase_sector)(struct solomon_device *, u32);
 int (*ds16_seeprom_erase_chip)(struct solomon_device *);
 int (*ds16_seeprom_write_nbyte)(struct solomon_device *, u32, u8 *, int);
+
+static int ds16_seeprom_fw_ds_read_factoryinfo(struct solomon_device *, u8 *);
+static int ds16_seeprom_fw_ds_write_factoryinfo(struct solomon_device *, u8 *);
 
 /*  calculate checksum
  *  parameter :
@@ -136,7 +139,9 @@ int ds16_seeprom_general_ucmd_write(struct solomon_device *dev, u8 *dbuf,
 int ds16_seeprom_general_ucmd_read(struct solomon_device *dev, u8 *Wbuf,
 		int WnByte, u8 *Rbuf, int RnByte)
 {
+#if !I2C_DMA_SUPPORT
 	int err = 0;
+#endif
 
 	unsigned char ws_wd[1024];
 	int seeprom_ws_wd_ndelay = 0;
@@ -146,7 +151,7 @@ int ds16_seeprom_general_ucmd_read(struct solomon_device *dev, u8 *Wbuf,
 	int ws_wd_nbyte = 0;
 	int ws_wd_ndelay;
 
-#if 0//I2C_DMA_SUPPORT
+#if I2C_DMA_SUPPORT
 	int32_t ret;
 	int32_t retries = 0;
 	unsigned char *buf_va = NULL;
@@ -194,7 +199,7 @@ int ds16_seeprom_general_ucmd_read(struct solomon_device *dev, u8 *Wbuf,
 	ws_wd_nbyte += WnByte;
 	ws_wd_ndelay = (RnByte*DELAY_WAIT_BEFORE_READ) + 10;
 
-#if 0//I2C_DMA_SUPPORT
+#if I2C_DMA_SUPPORT
 	if (Rbuf == NULL) {
 		SOLOMON_WARNNING("Rbuf is NULL!\n");
 		return -ENOMEM;
@@ -654,6 +659,11 @@ int ds16_seeprom_enable_protect(struct solomon_device *dev)
 	if (err != 0)
 		return err;
 
+	err = ds16_seeprom_wait_bsyclr(dev);
+
+	if (err != 0)
+		return err;
+
 	err = ds16_seeprom_rdsr(dev, (u8 *)&rd);
 
 	if (err != 0)
@@ -683,6 +693,11 @@ int ds16_seeprom_disable_protect(struct solomon_device *dev)
 		return err;
 
 	err = ds16_seeprom_wrsr(dev, 0x02);
+
+	if (err != 0)
+		return err;
+
+	err = ds16_seeprom_wait_bsyclr(dev);
 
 	if (err != 0)
 		return err;
@@ -833,8 +848,7 @@ int ds16_seeprom_write_nbyte_mx25v1001e(struct solomon_device *dev, u32 st,
  *
  *	return : >= 0 thend success, else ( < 0 ) fail
  */
-int ds16_seeprom_write_nbyte_mx25v1006e(struct solomon_device *dev,
-		u32 st, u8 *data_buf, int nbyte)
+int ds16_seeprom_write_nbyte_mx25v1006e(struct solomon_device *dev,u32 st, u8 *data_buf, int nbyte)
 {
 	int err = 0;
 	int data_length = 0;
@@ -849,7 +863,7 @@ int ds16_seeprom_write_nbyte_mx25v1006e(struct solomon_device *dev,
 	 * 256-192 = 64. So, the first write data count is 64.
 	 */
 	data_length = nbyte;
-	SOLOMON_WARNNING("write nbyte MX25V1006E");
+	SOLOMON_WARNNING("write nbyte MX25V1006E target Add = 0x%x, size = 0x%x",st,nbyte);
 	first_send_length = st%m_SEEPROM_WriteMax_Length;
 
 	if (first_send_length != 0) {
@@ -935,8 +949,8 @@ int ds16_seeprom_verify(struct solomon_device *dev, struct solomon_fw *fw)
 		return -2;
 	}
 
-	err = ds16_seeprom_read_nbyte(dev, fw->address, verify_data,
-			fw->byte_cnt);
+	err = ds16_seeprom_read_nbyte(dev, fw->address, verify_data, fw->byte_cnt);
+	SOLOMON_WARNNING("[ISP]ds16_seeprom_read_nbyte = 0x%x, len = %d\n",(int)(fw->address),(fw->byte_cnt));
 
 	if (err != 0) {
 		SOLOMON_WARNNING("Read fail for Verify");
@@ -1028,11 +1042,14 @@ int ds16_seeprom_firmware_update(struct solomon_device *dev,
 	int retry1 = FW_MAX_RETRY_COUNT, retry2 = FW_MAX_RETRY_COUNT;
 	struct solomon_fw_group *gPtr = NULL;
 	struct solomon_fw *ptr = NULL;
+	u8 rd_buf[512];
 
 retry_all:
 	SOLOMON_WARNNING("update start(retry:%d >>>", retry1);
 	if ((retry1--) > 0) {
 		if (all == BOOT_UPDATE_ALL) {
+			ds16_seeprom_fw_ds_read_factoryinfo(dev, rd_buf);
+
 			retry2 = FW_MAX_RETRY_COUNT;
 			do {
 				err = ds16_seeprom_erase_chip(dev);
@@ -1045,6 +1062,10 @@ retry_all:
 
 		if (err < ERROR_SUCCESS)
 			goto out;
+
+		if (all == BOOT_UPDATE_ALL) {
+			ds16_seeprom_fw_ds_write_factoryinfo(dev, rd_buf);
+		}
 
 		gPtr = fw_group;
 
@@ -1151,6 +1172,38 @@ static int ds16_seeprom_fw_ds_read_version(struct solomon_device *dev,
 
 	return err;
 }
+
+static int ds16_seeprom_fw_ds_read_factoryinfo(struct solomon_device *dev, u8 *factoryinfo)
+{
+	int err = ERROR_EFLAH_READ_FAIL;
+	int retry = FW_MAX_RETRY_COUNT;
+
+	do {
+		err = ds16_seeprom_read_nbyte(dev, 124*1024, (u8 *)factoryinfo, 512);
+
+		if (err == 0)
+			break;
+	} while ((retry--) > 0);
+
+	return err;
+}
+
+static int ds16_seeprom_fw_ds_write_factoryinfo(struct solomon_device *dev, u8 *factoryinfo)
+{
+	int err = ERROR_EFLAH_READ_FAIL;
+	int retry = FW_MAX_RETRY_COUNT;
+
+	do {
+		err = ds16_seeprom_write_nbyte(dev, 124*1024, factoryinfo, 512);
+
+		if (err >= 0)
+			break;
+		mdelay(1);
+	} while ((retry--) > 1);
+
+	return err;
+}
+
 #if 0
 /*	compare checkum on SEEPROM
  *	eFlash section = version(4bytes)+bytecount(4bytes)+checksum(4bytes)+

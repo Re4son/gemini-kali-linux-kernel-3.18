@@ -619,6 +619,8 @@ static int parse_meta_boot_arguments(unsigned int *raw_ptr)
 
 	CCCI_UTIL_INF_MSG("md type at lk:0x%x] with rat 0x%x\n",
 			md_type_at_lk[active_id], md_info_tag_array[0]);
+	CCCI_UTIL_INF_MSG("final active_id:%d, meta_boot_arguments:%d\n",
+			active_id, meta_boot_arguments[active_id]);
 
 	return 0;
 }
@@ -936,6 +938,31 @@ static void parse_mpu_setting(void)
 	}
 }
 
+static void dump_retrieve_info(void)
+{
+	int retrieve_num, i;
+	u64 array[2], md1_mem_addr;
+	char buf[32];
+
+	md1_mem_addr =  md_resv_mem_addr[MD_SYS1];
+
+	if (find_ccci_tag_inf("retrieve_num", (char *)&retrieve_num, (int)sizeof(int)) < 0) {
+		CCCI_UTIL_ERR_MSG("get retrieve_num failed.\n");
+		return;
+	}
+
+	CCCI_UTIL_INF_MSG("retrieve number is %d.\n", retrieve_num);
+
+	for (i = 0; i < retrieve_num; i++) {
+		snprintf(buf, 32, "retrieve%d", i);
+		if (find_ccci_tag_inf(buf, (char *)&array, sizeof(array))) {
+			CCCI_UTIL_INF_MSG("AP view(0x%llx ~ 0x%llx), MD view(0x%llx ~ 0x%llx)\n",
+					array[0], array[0] + array[1],
+					array[0] - md1_mem_addr, array[0] + array[1] - md1_mem_addr);
+		}
+	}
+}
+
 static int __init early_init_dt_get_chosen(unsigned long node, const char *uname, int depth, void *data)
 {
 	if (depth != 1 || (strcmp(uname, "chosen") != 0 && strcmp(uname, "chosen@0") != 0))
@@ -944,11 +971,13 @@ static int __init early_init_dt_get_chosen(unsigned long node, const char *uname
 	return 1;
 }
 
-static int collect_lk_boot_arguments(void)
+static int __init collect_lk_boot_arguments(void)
 {
 	/* Device tree method */
 	int ret;
 	unsigned int *raw_ptr;
+
+	s_g_lk_load_img_status = 0;
 
 	/* This function will initialize s_g_dt_chosen_node */
 	ret = of_scan_flat_dt(early_init_dt_get_chosen, NULL);
@@ -978,6 +1007,7 @@ _common_process:
 	parse_option_setting_from_lk();
 	parse_mpu_setting();
 	md_mem_info_parsing();
+	dump_retrieve_info();
 	md_chk_hdr_info_parse();
 	share_memory_info_parsing();
 	verify_md_enable_setting();
@@ -1199,7 +1229,7 @@ mpu_cfg_t *get_mpu_region_cfg_info(int region_id)
 /**************************************************************/
 /* The following functions are back up for old platform       */
 /**************************************************************/
-int ccci_parse_meta_md_setting(void)
+int __init ccci_parse_meta_md_setting(void)
 {
 	/* Device tree method */
 	int ret;
@@ -1425,8 +1455,11 @@ int get_md_img_type(int md_id)
 {
 	int md_support_val;
 
-	if (s_g_lk_load_img_status & LK_LOAD_MD_EN) /* MD standalone, only one image case */
+	if (s_g_lk_load_img_status & LK_LOAD_MD_EN) {/* MD standalone, only one image case */
+		CCCI_UTIL_INF_MSG("lk md en at get image type.val:%d[0x%x]\n",
+					get_md_type_from_lk(md_id), s_g_lk_load_img_status);
 		return get_md_type_from_lk(md_id);
+	}
 
 	/* Multi- image */
 	md_support_val = get_modem_support_cap(md_id);
@@ -1455,12 +1488,14 @@ int get_md_img_type(int md_id)
 			return 4;
 		if (md_support_val & MD_CAP_GSM)
 			return 1;
+		CCCI_UTIL_INF_MSG("get_md_img_type ret 0 for enhance\n");
 		return 0;
 	}
 
 	/* Legacy modem support val */
 	if (md_support_val <= LEGACY_UBIN_END_ID)
 		return md_support_val;
+	CCCI_UTIL_INF_MSG("get_md_img_type ret 0 for normal(%d)\n", md_support_val);
 	return 0;
 }
 
@@ -1636,7 +1671,7 @@ RESERVEDMEM_OF_DECLARE(ccci_reserve_smem_md1md3_init, CCCI_MD1MD3_SMEM_RESERVED_
 /**************************************************************/
 /* CCCI Feature option parsiong      entry                    */
 /**************************************************************/
-int ccci_util_fo_init(void)
+int __init ccci_util_fo_init(void)
 {
 	int idx;
 	struct device_node *node = NULL;

@@ -1,6 +1,17 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 
+# Copyright (C) 2016 MediaTek Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+
 import os
 import re
 import string
@@ -35,7 +46,7 @@ class ClkObj(ModuleObj):
                 key = re.findall(r'\D+', node.nodeName)[0].upper() + self.__suffix + '%s' %(re.findall(r'\d+', node.nodeName)[0])
 
                 if key not in ModuleObj.get_data(self):
-                    continue;
+	                continue;
 
                 data = ModuleObj.get_data(self)[key]
 

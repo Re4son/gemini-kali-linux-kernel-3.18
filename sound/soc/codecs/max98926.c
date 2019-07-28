@@ -597,6 +597,7 @@ static void max98926_set_sense_data(struct max98926_priv *max98926)
 {
 	struct snd_soc_codec *codec = max98926->codec;
 
+	pr_err("%s %d %d\n", __func__, max98926->i_slot, max98926->v_slot);
 	/* set VMON slots */
 	snd_soc_update_bits(codec,
 			    max98926_DOUT_CFG_VMON,
@@ -611,6 +612,7 @@ static void max98926_set_sense_data(struct max98926_priv *max98926)
 	snd_soc_update_bits(codec,
 			    max98926_DOUT_CFG_IMON,
 			    M98926_DAI_IMON_SLOT_MASK, max98926->i_slot);
+	pr_err("%s codec = %p", __func__, codec);
 }
 
 static int max98926_dai_set_fmt(struct snd_soc_dai *codec_dai,
@@ -665,6 +667,7 @@ static int max98926_set_clock(struct max98926_priv *max98926,
 	/* BCLK/LRCLK ratio calculation */
 	int blr_clk_ratio = params_channels(params) * max98926->ch_size;
 
+	pr_err("%s %d %d\n", __func__, params_channels(params), max98926->ch_size);
 
 	switch (blr_clk_ratio) {
 	case 32:
@@ -714,6 +717,7 @@ static int max98926_set_clock(struct max98926_priv *max98926,
 	snd_soc_update_bits(codec,
 			    max98926_DAI_CLK_MODE2,
 			    M98926_DAI_SR_MASK, dai_sr << M98926_DAI_SR_SHIFT);
+	pr_err("%s return 0\n", __func__);
 	return 0;
 }
 
@@ -728,6 +732,8 @@ static int max98926_dai_hw_params(struct snd_pcm_substream *substream,
 	ret = snd_soc_read(codec,
 			   max98926_DAI_CLK_DIV_N_LSBS);
 
+	pr_err("%s 0x1f read 0x%x\n", __func__, ret);
+	pr_err("%s %d\n", __func__, snd_pcm_format_width(params_format(params)));
 	switch (snd_pcm_format_width(params_format(params))) {
 
 	case 16:
@@ -899,6 +905,7 @@ static int max98926_WriteReg(u16 a_u2Addr, u16 a_u2Data)
 {
 	int  i4RetValue = 0;
 	char puSendCmd[2] = {(char)a_u2Addr , (char)a_u2Data};
+	pr_warn("%s\n", __func__);
 
 #ifdef CONFIG_MTK_I2C_EXTENSION
 	new_client->ext_flag = 0;

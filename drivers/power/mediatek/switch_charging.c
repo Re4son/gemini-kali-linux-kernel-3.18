@@ -103,8 +103,12 @@ unsigned int get_cv_voltage(void)
 DEFINE_MUTEX(g_ichg_aicr_access_mutex);
 DEFINE_MUTEX(g_aicr_access_mutex);
 DEFINE_MUTEX(g_ichg_access_mutex);
+DEFINE_MUTEX(g_hv_charging_mutex);
 unsigned int g_aicr_upper_bound;
+static bool g_pd_enable_power_path = true;
 static bool g_enable_dynamic_cv = true;
+static bool g_enable_hv_charging = true;
+static atomic_t g_en_kpoc_shdn = ATOMIC_INIT(1);
 
  /* ///////////////////////////////////////////////////////////////////////////////////////// */
  /* // JEITA */
@@ -521,6 +525,71 @@ int mtk_chr_reset_aicr_upper_bound(void)
 	return 0;
 }
 
+int mtk_chr_pd_enable_power_path(unsigned char enable)
+{
+	int ret = 0;
+
+	g_pd_enable_power_path = enable;
+	if (enable && g_bcct_input_flag && (g_bcct_input_value == 0)) {
+		battery_log(BAT_LOG_CRTI,
+			"%s: thermal set power path off, so keep it off\n",
+			__func__);
+		return -EINVAL;
+	}
+
+	ret = battery_charging_control(CHARGING_CMD_ENABLE_POWER_PATH,
+		&enable);
+
+	return ret;
+}
+
+int mtk_chr_enable_chr_type_det(unsigned char en)
+{
+	battery_log(BAT_LOG_CRTI, "%s: enable = %d\n", __func__, en);
+	battery_charging_control(CHARGING_CMD_ENABLE_CHR_TYPE_DET, &en);
+
+	return 0;
+}
+
+int mtk_chr_enable_discharge(bool enable)
+{
+	return battery_charging_control(CHARGING_CMD_ENABLE_DISCHARGE, &enable);
+}
+
+int mtk_chr_enable_hv_charging(bool en)
+{
+	battery_log(BAT_LOG_CRTI, "%s: en = %d\n", __func__, en);
+
+	mutex_lock(&g_hv_charging_mutex);
+	g_enable_hv_charging = en;
+	mutex_unlock(&g_hv_charging_mutex);
+
+	return 0;
+}
+
+bool mtk_chr_is_hv_charging_enable(void)
+{
+	return g_enable_hv_charging;
+}
+
+int mtk_chr_enable_kpoc_shutdown(bool en)
+{
+	if (en)
+		atomic_set(&g_en_kpoc_shdn, 1);
+	else
+		atomic_set(&g_en_kpoc_shdn, 0);
+	return 0;
+}
+
+bool mtk_chr_is_kpoc_shutdown_enable(void)
+{
+	int en = 0;
+
+	en = atomic_read(&g_en_kpoc_shdn);
+
+	return en > 0 ? true : false;
+}
+
 int set_chr_boost_current_limit(unsigned int current_limit)
 {
 	int ret = 0;
@@ -675,7 +744,7 @@ int hw_charger_limit_status(void){
 #else
        extern int mtk_thermal_get_temp(int id);
        //extern int LCD_Printf(const char *fmt, ...);
-       
+
        int tpcb = mtk_thermal_get_temp(9);
        //int tpcb1 = mtk_thermal_get_temp(0);
        //int tpcb2 = mtk_thermal_get_temp(3);
@@ -687,7 +756,7 @@ int hw_charger_limit_status(void){
        if(mt_get_bl_brightness() < 5){
                return 0;
        }
-       
+ 
        if(tpcb<42000){
                return 0;
        }
@@ -993,13 +1062,13 @@ static void pchr_turn_on_charging(void)
 
 		/* Select ICHG/AICR */
 		mtk_select_ichg_aicr();
-		
+
 		if(charging_enable == KAL_TRUE){
 			int limit = hw_charger_limit_status();
 			if(limit>0){
 				int MAX_CURRENT = CHARGE_CURRENT_500_00_MA;
 				int charger_vol = battery_meter_get_charger_voltage();
-				
+
 				if(limit == 1){
 					if ((pep_is_connect == KAL_TRUE)||(charger_vol>6000)){
 						MAX_CURRENT = CHARGE_CURRENT_900_00_MA;
@@ -1032,8 +1101,6 @@ static void pchr_turn_on_charging(void)
 						MAX_CURRENT = CHARGE_CURRENT_1300_00_MA;
 					}
 				}
-
-				
 				if( (g_temp_CC_value>MAX_CURRENT) || (g_temp_input_CC_value>MAX_CURRENT) ){
 					g_temp_CC_value = MAX_CURRENT;
 					g_temp_input_CC_value = MAX_CURRENT;

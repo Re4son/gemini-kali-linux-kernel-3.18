@@ -17,10 +17,10 @@
 #define DCM_OFF (0)
 #define DCM_ON	(1)
 
-typedef enum {
+enum ENUM_MCUSYS_DCM {
 	MCUSYS_DCM_OFF = DCM_OFF,
 	MCUSYS_DCM_ON = DCM_ON,
-} ENUM_MCUSYS_DCM;
+};
 
 
 void mt_dcm_disable(void);
@@ -31,7 +31,7 @@ int sync_dcm_set_mp0_freq(unsigned int mp0);
 int sync_dcm_set_mp1_freq(unsigned int mp1);
 int sync_dcm_set_mp2_freq(unsigned int mp2);
 
-int dcm_mcusys_mp2_sync_dcm(ENUM_MCUSYS_DCM on);
+int dcm_mcusys_mp2_sync_dcm(unsigned int on);
 
 #endif /* #ifndef __MT_DCM_H__ */
 

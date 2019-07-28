@@ -1,7 +1,0 @@
-config MTK_TOGGLE_SWITCH
-	tristate "MTK TOGGLE_WITCH Support"
-	default n
-	help
-	  Say Y here if you have Eastaeon TOGGLE_WITCH device for anti-tamper.
-
-	  If unsure, say Y.

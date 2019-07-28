@@ -131,8 +131,6 @@ static ssize_t boot_status_store(const char *buf, size_t count)
 	if (md_id < MAX_MD_NUM) {
 		if (trigger_md_boot(md_id) != 0)
 			CCCI_UTIL_INF_MSG("md%d n/a\n", md_id + 1);
-		else
-			clear_meta_1st_boot_arg(md_id);
 	} else
 		CCCI_UTIL_INF_MSG("invalid id(%d)\n", md_id + 1);
 	return count;
@@ -223,7 +221,10 @@ CCCI_ATTR(lk_md, 0444, &ccci_lk_load_md_show, NULL);
 
 /* Sys -- get ccci private feature info */
 /* If platform has special feature setting, platform code will implemet this function */
-int __attribute__((weak)) ccci_get_plat_ft_inf(char buf[], int size);
+int __attribute__((weak)) ccci_get_plat_ft_inf(char buf[], int size)
+{
+	return (ssize_t)snprintf(buf, size, "ft_inf_ver:1");
+}
 static ssize_t ccci_ft_inf_show(char *buf)
 {
 	if (ccci_get_plat_ft_inf) {
@@ -231,7 +232,7 @@ static ssize_t ccci_ft_inf_show(char *buf)
 		return (ssize_t)ccci_get_plat_ft_inf(buf, 4095);
 	}
 	/* Enter here means using default setting */
-	return (ssize_t)snprintf(buf, 4095, "ft_inf_ver:1");
+	return (ssize_t)ccci_get_plat_ft_inf(buf, 4095);
 }
 
 CCCI_ATTR(ft_info, 0444, &ccci_ft_inf_show, NULL);
@@ -260,23 +261,16 @@ static ssize_t kcfg_setting_show(char *buf)
 		"[modem en]:%c-%c-%c-%c-%c\n", md_en[0], md_en[1], md_en[2], md_en[3], md_en[4]);
 	curr += actual_write;
 
-	/* Feature option part */
-#ifdef CONFIG_EVDO_DT_SUPPORT
-	actual_write = snprintf(&buf[curr], 4096 - curr, "[EVDO_DT_SUPPORT]:1\n");
-#else
-	actual_write = snprintf(&buf[curr], 4096 - curr, "[EVDO_DT_SUPPORT]:0\n");
-#endif
-	curr += actual_write;
-#ifdef CONFIG_MTK_LTE_DC_SUPPORT
-	actual_write = snprintf(&buf[curr], 4096 - curr, "[MTK_LTE_DC_SUPPORT]:1\n");
-#else
-	actual_write = snprintf(&buf[curr], 4096 - curr, "[MTK_LTE_DC_SUPPORT]:0\n");
-#endif
-	curr += actual_write;
 	if (ccci_get_opt_val("opt_eccci_c2k") > 0) {
 		actual_write = snprintf(&buf[curr], 4096 - curr, "[MTK_ECCCI_C2K]:1\n");
 		curr += actual_write;
 	}
+
+	if (ccci_port_ver == 6) /* ECCCI_FSM */
+		actual_write = snprintf(&buf[curr], 4096 - curr, "[ccci_drv_ver]:V2\n"); /* FSM using v2 */
+	else
+		actual_write = snprintf(&buf[curr], 4096 - curr, "[ccci_drv_ver]:V1\n");
+	curr += actual_write;
 
 	/* Add total size to tail */
 	actual_write = snprintf(&buf[curr], 4096 - curr, "total:%d\n", curr);

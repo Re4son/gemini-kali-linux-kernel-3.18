@@ -303,8 +303,8 @@ static ssize_t mtkts_Abts_write(struct file *file, const char __user *buffer, si
 		&ptr_mtktsAbts_data->trip[8], &ptr_mtktsAbts_data->t_type[8], ptr_mtktsAbts_data->bind8,
 		&ptr_mtktsAbts_data->trip[9], &ptr_mtktsAbts_data->t_type[9], ptr_mtktsAbts_data->bind9,
 		&ptr_mtktsAbts_data->time_msec) == 32) {
-		mtkts_Abts_dprintk("[mtkts_Abts_write] mtkts_Abts_unregister_thermal\n");
 		down(&sem_mutex);
+		mtkts_Abts_dprintk("[mtkts_Abts_write] mtkts_Abts_unregister_thermal\n");
 		mtkts_Abts_unregister_thermal();
 
 		if (num_trip < 0 || num_trip > 10) {

@@ -13,11 +13,15 @@
 
 
 ifeq ($(CONFIG_MTK_MMPROFILE_SUPPORT),y)
-# The src folder should exist
-obj-y += src/
+
+ifeq ($(TARGET_BUILD_VARIANT),eng)
+	# The src folder should exist
+	obj-y += src/
+else
+	obj-y += dummy/
+endif
 
 else
-
-obj-y += dummy/
+	obj-y += dummy/
 
 endif

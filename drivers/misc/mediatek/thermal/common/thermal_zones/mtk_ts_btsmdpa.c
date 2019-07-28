@@ -49,8 +49,10 @@ IMM_GetOneChannelValue(int dwChannel, int data[4], int *rawdata)
 	return -1;
 }
 /*=============================================================*/
+static int doing_tz_unregister;
 static kuid_t uid = KUIDT_INIT(0);
 static kgid_t gid = KGIDT_INIT(1000);
+static DEFINE_SEMAPHORE(sem_mutex);
 
 static unsigned int interval;	/* seconds, 0 : no auto polling */
 static int trip_temp[10] = { 120000, 110000, 100000, 90000, 80000, 70000, 65000, 60000, 55000, 50000 };
@@ -845,6 +847,7 @@ static ssize_t mtkts_btsmdpa_write(struct file *file, const char __user *buffer,
 	     &ptr_btsmdpa_data->trip[8], &ptr_btsmdpa_data->t_type[8], ptr_btsmdpa_data->bind8,
 	     &ptr_btsmdpa_data->trip[9], &ptr_btsmdpa_data->t_type[9], ptr_btsmdpa_data->bind9,
 	     &ptr_btsmdpa_data->time_msec) == 32) {
+		down(&sem_mutex);
 		mtkts_btsmdpa_dprintk("[mtkts_btsmdpa_write] mtkts_btsmdpa_unregister_thermal\n");
 		mtkts_btsmdpa_unregister_thermal();
 
@@ -853,6 +856,7 @@ static ssize_t mtkts_btsmdpa_write(struct file *file, const char __user *buffer,
 				"Bad argument");
 			mtkts_btsmdpa_dprintk("[mtkts_btsmdpa_write] bad argument\n");
 			kfree(ptr_btsmdpa_data);
+			up(&sem_mutex);
 			return -EINVAL;
 		}
 
@@ -904,6 +908,7 @@ static ssize_t mtkts_btsmdpa_write(struct file *file, const char __user *buffer,
 		mtkts_btsmdpa_dprintk("[mtkts_btsmdpa_write] mtkts_btsmdpa_register_thermal\n");
 
 		mtkts_btsmdpa_register_thermal();
+		up(&sem_mutex);
 
 		kfree(ptr_btsmdpa_data);
 
@@ -1107,7 +1112,7 @@ void mtkts_btsmdpa_cancel_thermal_timer(void)
 	/* pr_debug("mtkts_btsmdpa_cancel_thermal_timer\n"); */
 
 	/* stop thermal framework polling when entering deep idle */
-	/* if (thz_dev)
+	/* if (thz_dev && !doing_tz_unregister)
 		cancel_delayed_work(&(thz_dev->poll_queue)); */
 }
 
@@ -1116,7 +1121,7 @@ void mtkts_btsmdpa_start_thermal_timer(void)
 {
 	/* pr_debug("mtkts_btsmdpa_start_thermal_timer\n"); */
 	/* resume thermal framework polling when leaving deep idle */
-	/* if (thz_dev != NULL && interval != 0)
+	/* if (thz_dev != NULL && interval != 0 && !doing_tz_unregister)
 		mod_delayed_work(system_freezable_wq, &(thz_dev->poll_queue), round_jiffies(msecs_to_jiffies(3000)));*/
 }
 
@@ -1145,8 +1150,10 @@ static void mtkts_btsmdpa_unregister_thermal(void)
 	mtkts_btsmdpa_dprintk("[mtkts_btsmdpa_unregister_thermal]\n");
 
 	if (thz_dev) {
+		doing_tz_unregister = 1;
 		mtk_thermal_zone_device_unregister(thz_dev);
 		thz_dev = NULL;
+		doing_tz_unregister = 0;
 	}
 }
 

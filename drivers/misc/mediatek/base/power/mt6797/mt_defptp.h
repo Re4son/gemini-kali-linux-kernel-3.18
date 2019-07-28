@@ -37,7 +37,7 @@
 	};
 	#endif
 #else
-	typedef unsigned char       bool;
+	unsigned char       bool;
 	#define EEM_BASEADDR        (0x1100B000)
 	#define eem_base EEM_BASEADDR
 #endif

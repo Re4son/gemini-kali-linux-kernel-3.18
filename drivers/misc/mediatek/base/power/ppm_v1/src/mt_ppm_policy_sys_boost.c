@@ -88,6 +88,7 @@ void mt_ppm_sysboost_core(enum ppm_sysboost_user user, unsigned int core_num)
 	ppm_unlock(&sysboost_policy.lock);
 	ppm_task_wakeup();
 }
+EXPORT_SYMBOL(mt_ppm_sysboost_core);
 
 void mt_ppm_sysboost_freq(enum ppm_sysboost_user user, unsigned int freq)
 {
@@ -126,6 +127,7 @@ void mt_ppm_sysboost_freq(enum ppm_sysboost_user user, unsigned int freq)
 	ppm_unlock(&sysboost_policy.lock);
 	ppm_task_wakeup();
 }
+EXPORT_SYMBOL(mt_ppm_sysboost_freq);
 
 static enum ppm_power_state ppm_sysboost_get_power_state_cb(enum ppm_power_state cur_state)
 {

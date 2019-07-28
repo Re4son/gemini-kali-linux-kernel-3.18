@@ -240,7 +240,7 @@ static imgsensor_struct imgsensor = {
 static SENSOR_WINSIZE_INFO_STRUCT imgsensor_winsize_info[10] =
 {{ 5664, 4240, 0,   0, 5664, 4240, 2832, 2120,  8,   4,   2816, 2112, 0,   0,  2816,  2112}, // Preview 
  { 5664, 4240, 0,   0, 5664, 4240, 5664, 4240, 00,  00,   5664, 4240,16,   8,  5632,  4224}, // capture  
- { 5664, 4240, 0,   0, 5664, 4240, 5664, 4240, 00,  00,   5664, 4240,16,   8,  5632,  3168}, // normal video 
+{ 5664, 4240, 16, 536, 5632, 3168, 5632, 3168, 00,  00,   5632, 3168, 0,   0,  5632,  3168}, /* normal video */
  { 2624, 1956, 8, 246, 2608, 1460, 1280,  720, 00,  00,   1280,  720, 2,   2,  1280,   720}, //hight speed video
  { 2624, 1956, 8, 246, 2608, 1460, 1280,  720, 00,  00,   1280,  720, 2,   2,  1280,   720}, //slim video
  { 5664, 4240, 0,   0, 5664, 4240, 2832, 2120,  8,   4,   2816, 2112, 0,   0,  2816,  2112}, // Custom1 (defaultuse preview)
@@ -3028,7 +3028,6 @@ static kal_uint32 preview(MSDK_SENSOR_EXPOSURE_WINDOW_STRUCT *image_window,
     imgsensor.line_length = imgsensor_info.pre.linelength;
     imgsensor.frame_length = imgsensor_info.pre.framelength;
     imgsensor.min_frame_length = imgsensor_info.pre.framelength;
-    imgsensor.current_fps = imgsensor.current_fps;
     //imgsensor.autoflicker_en = KAL_FALSE;
     spin_unlock(&imgsensor_drv_lock);
     preview_setting();
@@ -3519,8 +3518,6 @@ static kal_uint32 set_max_framerate_by_scenario(MSDK_SCENARIO_ID_ENUM scenario_i
             set_dummy();
             break;
         case MSDK_SCENARIO_ID_VIDEO_PREVIEW:
-            if(framerate == 0)
-                return ERROR_NONE;
             frameHeight = imgsensor_info.normal_video.pclk / framerate * 10 / imgsensor_info.normal_video.linelength;
             spin_lock(&imgsensor_drv_lock);
             imgsensor.dummy_line = frameHeight - imgsensor_info.normal_video.framelength;
@@ -3564,6 +3561,7 @@ static kal_uint32 set_max_framerate_by_scenario(MSDK_SCENARIO_ID_ENUM scenario_i
             imgsensor.min_frame_length = imgsensor.frame_length;
             spin_unlock(&imgsensor_drv_lock);
             set_dummy();
+		break;
 		case MSDK_SCENARIO_ID_CUSTOM1:
             frameHeight = imgsensor_info.custom1.pclk / framerate * 10 / imgsensor_info.custom1.linelength;
             spin_lock(&imgsensor_drv_lock);

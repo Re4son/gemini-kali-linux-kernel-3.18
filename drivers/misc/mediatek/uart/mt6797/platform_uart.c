@@ -1,19 +1,14 @@
 /*
- * (C) Copyright 2008
- * MediaTek <www.mediatek.com>
- * MingHsien Hsieh <minghsien.hsieh@mediatek.com>
- *
- * MTK UART Driver
+ * Copyright (C) 2017 MediaTek Inc.
  *
  * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
  */
 /*---------------------------------------------------------------------------*/
 #include <linux/tty.h>
@@ -100,7 +95,7 @@ static struct mtk_uart_setting mtk_uart_default_settings[] = {
 	 .sysrq = FALSE, .hw_flow = TRUE, .vff = TRUE,
 	 },
 	{
-	 .tx_mode = UART_TX_VFIFO_DMA, .rx_mode = UART_RX_VFIFO_DMA, .dma_mode = UART_DMA_MODE_0,
+	 .tx_mode = UART_NON_DMA, .rx_mode = UART_NON_DMA, .dma_mode = UART_DMA_MODE_0,
 	 .tx_trig = UART_FCR_TXFIFO_1B_TRI, .rx_trig = UART_FCR_RXFIFO_12B_TRI,
 
 	 /* .uart_base = AP_UART1_BASE, .irq_num = UART1_IRQ_BIT_ID, .irq_sen = MT_LEVEL_SENSITIVE, */
@@ -155,7 +150,6 @@ static unsigned int modem_uart[UART_NR] = { 1, 0, 0, 1 };
 #endif
 /*---------------------------------------------------------------------------*/
 /* uart control blocks */
-static struct mtk_uart mtk_uarts[UART_NR];
 /*---------------------------------------------------------------------------*/
 struct mtk_uart_setting *get_uart_default_settings(int idx)
 {
@@ -2223,36 +2217,44 @@ void mtk_uart_restore(void)
 	unsigned long flags;
 	struct mtk_uart *uart;
 
-	uart = console_port;
-	base = uart->base;
+	int i;
 
-	mtk_uart_power_up(uart);
-	spin_lock_irqsave(&mtk_console_lock, flags);
-	reg_sync_writel(0xbf, UART_LCR);
-	reg_sync_writel(uart->registers.efr, UART_EFR);
-	reg_sync_writel(uart->registers.lcr, UART_LCR);
-	reg_sync_writel(uart->registers.fcr, UART_FCR);
+	for (i = 0; i < UART_NR; i++) {
 
-	/* baudrate */
-	reg_sync_writel(uart->registers.highspeed, UART_HIGHSPEED);
-	reg_sync_writel(uart->registers.fracdiv_l, UART_FRACDIV_L);
-	reg_sync_writel(uart->registers.fracdiv_m, UART_FRACDIV_M);
-	reg_sync_writel(uart->registers.lcr | UART_LCR_DLAB, UART_LCR);
-	reg_sync_writel(uart->registers.dll, UART_DLL);
-	reg_sync_writel(uart->registers.dlh, UART_DLH);
-	reg_sync_writel(uart->registers.lcr, UART_LCR);
-	reg_sync_writel(uart->registers.sample_count, UART_SAMPLE_COUNT);
-	reg_sync_writel(uart->registers.sample_point, UART_SAMPLE_POINT);
-	reg_sync_writel(uart->registers.guard, UART_GUARD);
+		uart = &mtk_uarts[i];
+		base = uart->base;
 
-	/* flow control */
-	reg_sync_writel(uart->registers.escape_en, UART_ESCAPE_EN);
-	reg_sync_writel(uart->registers.mcr, UART_MCR);
-	reg_sync_writel(uart->registers.ier, UART_IER);
+		mtk_uart_power_up(uart);
+		spin_lock_irqsave(&mtk_console_lock, flags);
+		reg_sync_writel(0xbf, UART_LCR);
+		reg_sync_writel(uart->registers.efr, UART_EFR);
+		reg_sync_writel(uart->registers.lcr, UART_LCR);
+		reg_sync_writel(uart->registers.fcr, UART_FCR);
 
-	reg_sync_writel(uart->registers.rx_sel, UART_RX_SEL);
+		/* baudrate */
+		reg_sync_writel(uart->registers.highspeed, UART_HIGHSPEED);
+		reg_sync_writel(uart->registers.fracdiv_l, UART_FRACDIV_L);
+		reg_sync_writel(uart->registers.fracdiv_m, UART_FRACDIV_M);
+		reg_sync_writel(uart->registers.lcr | UART_LCR_DLAB, UART_LCR);
+		reg_sync_writel(uart->registers.dll, UART_DLL);
+		reg_sync_writel(uart->registers.dlh, UART_DLH);
+		reg_sync_writel(uart->registers.lcr, UART_LCR);
+		reg_sync_writel(uart->registers.sample_count, UART_SAMPLE_COUNT);
+		reg_sync_writel(uart->registers.sample_point, UART_SAMPLE_POINT);
+		reg_sync_writel(uart->registers.guard, UART_GUARD);
 
-	spin_unlock_irqrestore(&mtk_console_lock, flags);
+		/* flow control */
+		reg_sync_writel(uart->registers.escape_en, UART_ESCAPE_EN);
+		reg_sync_writel(uart->registers.mcr, UART_MCR);
+		reg_sync_writel(uart->registers.ier, UART_IER);
+
+		reg_sync_writel(uart->registers.rx_sel, UART_RX_SEL);
+
+		spin_unlock_irqrestore(&mtk_console_lock, flags);
+
+		if (uart != console_port)
+				mtk_uart_power_down(uart);
+	}
 #endif
 }
 

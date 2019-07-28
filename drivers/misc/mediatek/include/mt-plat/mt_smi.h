@@ -61,6 +61,9 @@ typedef enum {
 	SMI_BWC_SCEN_HDMI4K,
 	SMI_BWC_SCEN_VPMJC,
 	SMI_BWC_SCEN_N3D,
+	SMI_BWC_SCEN_CAM_PV,
+	SMI_BWC_SCEN_CAM_CP,
+	SMI_BWC_SCEN_CAM_ZSD,
 	SMI_BWC_SCEN_CNT
 } MTK_SMI_BWC_SCEN;
 
@@ -113,6 +116,7 @@ typedef struct {
 	unsigned int ddr_type;
 	unsigned int step;
 	unsigned int venc_size;
+	unsigned int preview_size;
 
 	unsigned int ret;
 } MTK_MMDVFS_CMD;

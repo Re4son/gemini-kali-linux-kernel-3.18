@@ -1,7 +1,16 @@
 /******************************************************************************
  * mtk_tpd.c - MTK Android Linux Touch Panel Device Driver               *
  *                                                                            *
- * Copyright 2008-2009 MediaTek Co.,Ltd.                                      *
+ * Copyright (C) 2016 MediaTek Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
  *                                                                            *
  * DESCRIPTION:                                                               *
  *     this file provide basic touch panel event to input sub system          *
@@ -34,7 +43,7 @@
 #if defined(CONFIG_MTK_S3320) || defined(CONFIG_MTK_S3320_50) \
 	|| defined(CONFIG_MTK_S3320_47) || defined(CONFIG_MTK_MIT200) \
 	|| defined(CONFIG_TOUCHSCREEN_SYNAPTICS_S3528) || defined(CONFIG_MTK_S7020) \
-	|| defined(CONFIG_TOUCHSCREEN_MTK_SYNAPTICS_3320_50)
+	|| defined(CONFIG_TOUCHSCREEN_MTK_SYNAPTICS_3320_50) || defined(CONFIG_TOUCHSCREEN_MTK_SSL_SSD20XX)
 #include <linux/input/mt.h>
 #endif /* CONFIG_MTK_S3320 */
 
@@ -630,7 +639,7 @@ static int tpd_probe(struct platform_device *pdev)
 #if !defined(CONFIG_MTK_S3320) && !defined(CONFIG_MTK_S3320_47)\
 	&& !defined(CONFIG_MTK_S3320_50) && !defined(CONFIG_MTK_MIT200) \
 	&& !defined(CONFIG_TOUCHSCREEN_SYNAPTICS_S3528) && !defined(CONFIG_MTK_S7020) \
-	&& !defined(CONFIG_TOUCHSCREEN_MTK_SYNAPTICS_3320_50)
+	&& !defined(CONFIG_TOUCHSCREEN_MTK_SYNAPTICS_3320_50) && !defined(CONFIG_TOUCHSCREEN_MTK_SSL_SSD20XX)
 	set_bit(BTN_TOUCH, tpd->dev->keybit);
 #endif /* CONFIG_MTK_S3320 */
 	set_bit(INPUT_PROP_DIRECT, tpd->dev->propbit);
@@ -681,7 +690,7 @@ static int tpd_probe(struct platform_device *pdev)
 #if defined(CONFIG_MTK_S3320) || defined(CONFIG_MTK_S3320_47) \
 	|| defined(CONFIG_MTK_S3320_50) || defined(CONFIG_MTK_MIT200) \
 	|| defined(CONFIG_TOUCHSCREEN_SYNAPTICS_S3528) || defined(CONFIG_MTK_S7020) \
-	|| defined(CONFIG_TOUCHSCREEN_MTK_SYNAPTICS_3320_50)
+	|| defined(CONFIG_TOUCHSCREEN_MTK_SYNAPTICS_3320_50) || defined(CONFIG_TOUCHSCREEN_MTK_SSL_SSD20XX)
 		input_set_abs_params(tpd->dev, ABS_MT_PRESSURE, 0, 255, 0, 0);
 		input_set_abs_params(tpd->dev, ABS_MT_WIDTH_MAJOR, 0, 15, 0, 0);
 		input_set_abs_params(tpd->dev, ABS_MT_WIDTH_MINOR, 0, 15, 0, 0);

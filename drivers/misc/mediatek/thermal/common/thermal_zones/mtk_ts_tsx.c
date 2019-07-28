@@ -41,6 +41,8 @@
 /*=============================================================*/
 static kuid_t uid = KUIDT_INIT(0);
 static kgid_t gid = KGIDT_INIT(1000);
+static DEFINE_SEMAPHORE(sem_mutex);
+static int isTimerCancelled;
 
 
 static unsigned int interval;	/* seconds, 0 : no auto polling */
@@ -337,6 +339,7 @@ static ssize_t mtktstsx_write(struct file *file, const char __user *buffer, size
 		&ptr_mtktstsx_data->trip[9], &ptr_mtktstsx_data->t_type[9], ptr_mtktstsx_data->bind9,
 		&ptr_mtktstsx_data->time_msec) == 32) {
 
+		down(&sem_mutex);
 		mtktstsx_dprintk("[mtktstsx_write] mtktstsx_unregister_thermal\n");
 		mtktstsx_unregister_thermal();
 
@@ -345,6 +348,7 @@ static ssize_t mtktstsx_write(struct file *file, const char __user *buffer, size
 					"Bad argument");
 			mtktspmic_dprintk("[mtktstsx_write] bad argument\n");
 			kfree(ptr_mtktstsx_data);
+			up(&sem_mutex);
 			return -EINVAL;
 		}
 
@@ -393,6 +397,7 @@ static ssize_t mtktstsx_write(struct file *file, const char __user *buffer, size
 
 		mtktstsx_dprintk("[mtktstsx_write] mtktstsx_register_thermal\n");
 		mtktstsx_register_thermal();
+		up(&sem_mutex);
 		kfree(ptr_mtktstsx_data);
 		return count;
 	}
@@ -409,8 +414,15 @@ void mtkts_tsx_cancel_thermal_timer(void)
 	/* pr_debug("mtkts_tsx_cancel_thermal_timer\n"); */
 
 	/* stop thermal framework polling when entering deep idle */
-	if (thz_dev)
+	if (down_trylock(&sem_mutex))
+		return;
+
+	if (thz_dev) {
 		cancel_delayed_work(&(thz_dev->poll_queue));
+		isTimerCancelled = 1;
+	}
+
+	up(&sem_mutex);
 }
 
 
@@ -418,8 +430,18 @@ void mtkts_tsx_start_thermal_timer(void)
 {
 	/* pr_debug("mtkts_tsx_start_thermal_timer\n"); */
 	/* resume thermal framework polling when leaving deep idle */
-	if (thz_dev != NULL && interval != 0)
+	if (!isTimerCancelled)
+		return;
+
+	if (down_trylock(&sem_mutex))
+		return;
+
+	if (thz_dev != NULL && interval != 0) {
 		mod_delayed_work(system_freezable_wq, &(thz_dev->poll_queue), round_jiffies(msecs_to_jiffies(1000)));
+		isTimerCancelled = 0;
+	}
+
+	up(&sem_mutex);
 }
 
 /*

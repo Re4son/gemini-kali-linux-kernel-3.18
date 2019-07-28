@@ -63,8 +63,9 @@ long sec_core_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	int err = 0;
 	int ret = 0;
 	unsigned int rid[4];
+#ifdef NVRAM_HW_CRYPTO_SUPPORT
 	META_CONTEXT meta_ctx;
-
+#endif
 	/* ---------------------------------- */
 	/* IOCTL                              */
 	/* ---------------------------------- */
@@ -119,7 +120,7 @@ long sec_core_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		ret = sec_boot_enabled();
 		ret = osal_copy_to_user((void __user *)arg, (void *)&ret, sizeof(int));
 		break;
-
+#ifdef NVRAM_HW_CRYPTO_SUPPORT
 		/* ---------------------------------- */
 		/* NVRAM HW encryption                */
 		/* ---------------------------------- */
@@ -158,7 +159,9 @@ long sec_core_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		ret = sec_boot_hacc_init();
 		ret = osal_copy_to_user((void __user *)arg, (void *)&ret, sizeof(int));
 		break;
-
+#endif
+	default:
+		break;
 	}
 
 	return 0;

@@ -296,7 +296,7 @@ static int slp_suspend_ops_enter(suspend_state_t state)
 	int ret = 0;
 
 #if SLP_SLEEP_DPIDLE_EN
-#if defined(CONFIG_MT_SND_SOC_6755) /*|| defined(CONFIG_MT_SND_SOC_6757)*/ || defined(CONFIG_MT_SND_SOC_6797)
+#if defined(CONFIG_MT_SND_SOC_6755) || defined(CONFIG_MT_SND_SOC_6750) || defined(CONFIG_MT_SND_SOC_6797)
 	int fm_radio_is_playing = 0;
 
 	if (ConditionEnterSuspend() == true)
@@ -365,7 +365,7 @@ static int slp_suspend_ops_enter(suspend_state_t state)
 #endif
 
 #if SLP_SLEEP_DPIDLE_EN
-#if defined(CONFIG_MT_SND_SOC_6755) /*|| defined(CONFIG_MT_SND_SOC_6757)*/ || defined(CONFIG_MT_SND_SOC_6797)
+#if defined(CONFIG_MT_SND_SOC_6755) || defined(CONFIG_MT_SND_SOC_6750) || defined(CONFIG_MT_SND_SOC_6797)
 	if (slp_ck26m_on | fm_radio_is_playing)
 #else
 	if (slp_ck26m_on)
@@ -434,9 +434,8 @@ int slp_set_wakesrc(u32 wakesrc, bool enable, bool ck26m_on)
 	unsigned long flags;
 
 	slp_notice("wakesrc = 0x%x, enable = %u, ck26m_on = %u\n", wakesrc, enable, ck26m_on);
-
-	wakesrc |= WAKE_SRC_KP ; //====add====
-	
+	//====Add by chunjian.zheng,2018.09.25====
+	wakesrc |= WAKE_SRC_KP ; 	
 #if SLP_REPLACE_DEF_WAKESRC
 	if (wakesrc & WAKE_SRC_CFG_KEY)
 #else
@@ -472,6 +471,22 @@ wake_reason_t slp_get_wake_reason(void)
 bool slp_will_infra_pdn(void)
 {
 	return is_infra_pdn(slp_spm_flags);
+}
+
+void slp_set_infra_on(bool infra_on)
+{
+	if (infra_on) {
+		slp_spm_flags |= SPM_FLAG_DIS_INFRA_PDN;
+#if SLP_SLEEP_DPIDLE_EN
+		slp_spm_deepidle_flags |= SPM_FLAG_DIS_INFRA_PDN;
+#endif
+	} else {
+		slp_spm_flags &= ~SPM_FLAG_DIS_INFRA_PDN;
+#if SLP_SLEEP_DPIDLE_EN
+		slp_spm_deepidle_flags &= ~SPM_FLAG_DIS_INFRA_PDN;
+#endif
+	}
+	slp_notice("slp_set_infra_on (%d): 0x%x, 0x%x\n", infra_on, slp_spm_flags, slp_spm_deepidle_flags);
 }
 
 void slp_module_init(void)

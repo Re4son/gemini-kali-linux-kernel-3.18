@@ -56,6 +56,9 @@
 #include <linux/of_reserved_mem.h>
 #include <mt-plat/mtk_memcfg.h>
 #endif
+
+#include <mt-plat/aee.h>
+
 void __iomem *DRAMCAO_CHA_BASE_ADDR;
 void __iomem *DDRPHY_BASE_ADDR;
 void __iomem *DRAMCNAO_CHA_BASE_ADDR;
@@ -81,6 +84,11 @@ static unsigned int enter_pdp_cnt;
 static unsigned int dram_rank_num;
 phys_addr_t dram_rank0_addr, dram_rank1_addr;
 
+#define DRAMC_RSV_TAG "[DRAMC_RSV]"
+#define dramc_rsv_aee_warn(string, args...) do {\
+	pr_err("[ERR]"string, ##args); \
+	aee_kernel_warning(DRAMC_RSV_TAG, "[ERR]"string, ##args);  \
+} while (0)
 
 struct dram_info *g_dram_info_dummy_read = NULL;
 
@@ -585,11 +593,15 @@ void spm_dpd_dram_init(void)
 }
 
 #ifdef CONFIG_MTK_DRAMC_PASR
+static DEFINE_SPINLOCK(dramc_lock);
 static int acquire_dram_ctrl(void)
 {
 	unsigned int cnt;
+	unsigned long save_flags;
 
 	/* acquire SPM HW SEMAPHORE to avoid race condition */
+	spin_lock_irqsave(&dramc_lock, save_flags);
+
 	cnt = 100;
 	do {
 		if ((readl(PDEF_SPM_AP_SEMAPHORE) & 0x1) != 0x1) {
@@ -603,15 +615,20 @@ static int acquire_dram_ctrl(void)
 
 		cnt--;
 		/* pr_err("[DRAMC] wait for SPM HW SEMAPHORE\n"); */
+		spin_unlock_irqrestore(&dramc_lock, save_flags);
 		udelay(10);
+		spin_lock_irqsave(&dramc_lock, save_flags);
 	} while (cnt > 0);
 
 	if (cnt == 0) {
+		spin_unlock_irqrestore(&dramc_lock, save_flags);
 		pr_warn("[DRAMC] can NOT get SPM HW SEMAPHORE!\n");
 		return -1;
 	}
 
 	/* pr_err("[DRAMC] get SPM HW SEMAPHORE success!\n"); */
+
+	spin_unlock_irqrestore(&dramc_lock, save_flags);
 
 	return 0;
 }
@@ -643,11 +660,13 @@ int enter_pasr_dpd_config(unsigned char segment_rank0,
 	unsigned int i, cnt = 1000;
 	unsigned int u4value_1E4 = 0;
 	unsigned int u4value_1E8 = 0;
-	unsigned int u4value_E4 = 0;
-	unsigned int u4value_F4 = 0;
+	unsigned int u4value_1DC = 0;
+	unsigned long save_flags;
 
+	local_irq_save(save_flags);
 	if (acquire_dram_ctrl() != 0) {
 		pr_warn("[DRAMC0] can NOT get SPM HW SEMAPHORE!\n");
+		local_irq_restore(save_flags);
 		return -1;
 	}
 	/* pr_warn("[DRAMC0] get SPM HW SEMAPHORE!\n"); */
@@ -658,23 +677,24 @@ int enter_pasr_dpd_config(unsigned char segment_rank0,
 	rank_pasr_segment[0], rank_pasr_segment[1]);
 
 	/*Channel-A*/
-	u4value_E4 = readl(PDEF_DRAMC0_CHA_REG_0E4);
-	u4value_F4 = readl(PDEF_DRAMC0_CHA_REG_0F4);
 	u4value_1E8 = readl(PDEF_DRAMC0_CHA_REG_1E8);
 	u4value_1E4 = readl(PDEF_DRAMC0_CHA_REG_1E4);
+	u4value_1DC = readl(PDEF_DRAMC0_CHA_REG_1DC); /* DCM backup */
 
-	writel(readl(PDEF_DRAMC0_CHA_REG_1E8) | 0x04000000,
+	writel(readl(PDEF_DRAMC0_CHA_REG_1E8) | 0x04000000, /* Disable MR4 */
 	PDEF_DRAMC0_CHA_REG_1E8);
-	writel(readl(PDEF_DRAMC0_CHA_REG_1E4) & 0xF7FFFFFF,
+	writel(readl(PDEF_DRAMC0_CHA_REG_1E4) & 0xF7FFFFFF, /* Disable ZQCS */
 	PDEF_DRAMC0_CHA_REG_1E4);
 
 	mb(); /* flush memory */
 	udelay(2);
 
-	writel(readl(PDEF_DRAMC0_CHA_REG_0E4) | 0x00000004,
-	PDEF_DRAMC0_CHA_REG_0E4);
-	writel(readl(PDEF_DRAMC0_CHA_REG_0F4) | 0x00100000,
-	PDEF_DRAMC0_CHA_REG_0F4);
+	writel(readl(PDEF_DRAMC0_CHA_REG_1DC) | 0x04000000, /* DCM off 0x1DC[26] = 1; MIOCKCTRLOFF = 1 */
+	PDEF_DRAMC0_CHA_REG_1DC);
+	writel(readl(PDEF_DRAMC0_CHA_REG_1DC) & 0xFFFFFFFD, /* DCM off 0x1DC[1] = 0; DCMEN2 = 0 */
+	PDEF_DRAMC0_CHA_REG_1DC);
+	writel(readl(PDEF_DRAMC0_CHA_REG_1DC) & 0xBFFFFFFF, /* DCM off 0x1DC[30] = 0; R_DMPHYCLKDYNGEN=0 */
+	PDEF_DRAMC0_CHA_REG_1DC);
 
 	for (i = 0; i < 2; i++) {
 		if ((i == 1) && (rank_pasr_segment[i] == 0xFF))
@@ -693,7 +713,7 @@ int enter_pasr_dpd_config(unsigned char segment_rank0,
 				if (release_dram_ctrl() != 0)
 					pr_warn("[DRAMC0] release SPM HW SEMAPHORE fail!\n");
 				/* pr_warn("[DRAMC0] release SPM HW SEMAPHORE success!\n"); */
-
+				local_irq_restore(save_flags);
 				return -1; }
 			udelay(1);
 			} while ((readl(PDEF_DRAMCNAO_CHA_REG_3B8)
@@ -703,17 +723,15 @@ int enter_pasr_dpd_config(unsigned char segment_rank0,
 		PDEF_DRAMC0_CHA_REG_1E4);
 	}
 
-	writel(u4value_E4, PDEF_DRAMC0_CHA_REG_0E4);
-	writel(u4value_F4, PDEF_DRAMC0_CHA_REG_0F4);
 	writel(u4value_1E4, PDEF_DRAMC0_CHA_REG_1E4);
 	writel(u4value_1E8, PDEF_DRAMC0_CHA_REG_1E8);
+	writel(u4value_1DC, PDEF_DRAMC0_CHA_REG_1DC); /* DCM restore */
 	writel(0, PDEF_DRAMC0_CHA_REG_088);
 
 	/*Channel-B*/
-	u4value_E4 = readl(PDEF_DRAMC0_CHB_REG_0E4);
-	u4value_F4 = readl(PDEF_DRAMC0_CHB_REG_0F4);
 	u4value_1E8 = readl(PDEF_DRAMC0_CHB_REG_1E8);
 	u4value_1E4 = readl(PDEF_DRAMC0_CHB_REG_1E4);
+	u4value_1DC = readl(PDEF_DRAMC0_CHB_REG_1DC); /* DCM backup */
 	writel(readl(PDEF_DRAMC0_CHB_REG_1E8) | 0x04000000,
 	PDEF_DRAMC0_CHB_REG_1E8);
 	writel(readl(PDEF_DRAMC0_CHB_REG_1E4) & 0xF7FFFFFF,
@@ -722,10 +740,12 @@ int enter_pasr_dpd_config(unsigned char segment_rank0,
 	mb(); /*flush memory */
 	udelay(2);
 
-	writel(readl(PDEF_DRAMC0_CHB_REG_0E4) | 0x00000004,
-	PDEF_DRAMC0_CHB_REG_0E4);
-	writel(readl(PDEF_DRAMC0_CHB_REG_0F4) | 0x00100000,
-	PDEF_DRAMC0_CHB_REG_0F4);
+	writel(readl(PDEF_DRAMC0_CHB_REG_1DC) | 0x04000000, /* DCM off 0x1DC[26] = 1; MIOCKCTRLOFF = 1 */
+	PDEF_DRAMC0_CHB_REG_1DC);
+	writel(readl(PDEF_DRAMC0_CHB_REG_1DC) & 0xFFFFFFFD, /* DCM off 0x1DC[1] = 0; DCMEN2 = 0 */
+	PDEF_DRAMC0_CHB_REG_1DC);
+	writel(readl(PDEF_DRAMC0_CHB_REG_1DC) & 0xBFFFFFFF, /* DCM off 0x1DC[30] = 0; R_DMPHYCLKDYNGEN=0 */
+	PDEF_DRAMC0_CHB_REG_1DC);
 
 	for (i = 0; i < 2; i++) {
 		if ((i == 1) && (rank_pasr_segment[i] == 0xFF))
@@ -743,6 +763,7 @@ int enter_pasr_dpd_config(unsigned char segment_rank0,
 				if (release_dram_ctrl() != 0)
 					pr_warn("[DRAMC0] release SPM HW SEMAPHORE fail!\n");
 				/* pr_warn("[DRAMC0] release SPM HW SEMAPHORE success!\n"); */
+				local_irq_restore(save_flags);
 
 				return -1; }
 			udelay(1);
@@ -752,10 +773,9 @@ int enter_pasr_dpd_config(unsigned char segment_rank0,
 		PDEF_DRAMC0_CHB_REG_1E4);
 	}
 
-	writel(u4value_E4, PDEF_DRAMC0_CHB_REG_0E4);
-	writel(u4value_F4, PDEF_DRAMC0_CHB_REG_0F4);
 	writel(u4value_1E4, PDEF_DRAMC0_CHB_REG_1E4);
 	writel(u4value_1E8, PDEF_DRAMC0_CHB_REG_1E8);
+	writel(u4value_1DC, PDEF_DRAMC0_CHB_REG_1DC); /* DCM restore */
 	writel(0, PDEF_DRAMC0_CHB_REG_088);
 
 	if ((segment_rank1 == 0xFF) && (enter_pdp_cnt == 0)) {
@@ -767,7 +787,7 @@ int enter_pasr_dpd_config(unsigned char segment_rank0,
 	if (release_dram_ctrl() != 0)
 		pr_warn("[DRAMC0] release SPM HW SEMAPHORE fail!\n");
 	/* pr_warn("[DRAMC0] release SPM HW SEMAPHORE success!\n"); */
-
+	local_irq_restore(save_flags);
 	return 0;
 }
 
@@ -775,12 +795,15 @@ int exit_pasr_dpd_config(void)
 {
 	int ret;
 	unsigned char rk1 = 0;
+	unsigned long save_flags;
+
 	/*slp_dpd_en(0);*/
 	/*slp_pasr_en(0, 0);*/
 	if (enter_pdp_cnt == 1) {
-
+		local_irq_save(save_flags);
 		if (acquire_dram_ctrl() != 0) {
 			pr_warn("[DRAMC0] can NOT get SPM HW SEMAPHORE!\n");
+			local_irq_restore(save_flags);
 			return -1;
 		}
 		/* pr_warn("[DRAMC0] get SPM HW SEMAPHORE!\n"); */
@@ -790,7 +813,7 @@ int exit_pasr_dpd_config(void)
 		if (release_dram_ctrl() != 0)
 			pr_warn("[DRAMC0] release SPM HW SEMAPHORE fail!\n");
 		/* pr_warn("[DRAMC0] release SPM HW SEMAPHORE success!\n"); */
-
+		local_irq_restore(save_flags);
 		rk1 = 0xFF;
 	}
 
@@ -854,7 +877,6 @@ int Binning_DRAM_complex_mem_test(void)
 
 	for (i = 0; i < size; i++) {
 		if (MEM32_BASE[i] != 0) {
-			vfree(ptr);
 			/* return -1; */
 			ret = -1;
 			goto fail;
@@ -865,7 +887,6 @@ int Binning_DRAM_complex_mem_test(void)
 	/* === Verify the tied bits (tied low) === */
 	for (i = 0; i < size; i++) {
 		if (MEM32_BASE[i] != 0xffffffff) {
-			vfree(ptr);
 			/* return -2; */
 			ret = -2;
 			goto fail;
@@ -880,7 +901,6 @@ int Binning_DRAM_complex_mem_test(void)
 	pattern8 = 0x00;
 	for (i = 0; i < len; i++) {
 		if (MEM8_BASE[i] != pattern8++) {
-			vfree(ptr);
 			/* return -3; */
 			ret = -3;
 			goto fail;
@@ -893,7 +913,6 @@ int Binning_DRAM_complex_mem_test(void)
 		if (MEM8_BASE[i] == pattern8)
 			MEM16_BASE[j] = pattern8;
 		if (MEM16_BASE[j] != pattern8) {
-			vfree(ptr);
 			/* return -4; */
 			ret = -4;
 			goto fail;
@@ -908,7 +927,6 @@ int Binning_DRAM_complex_mem_test(void)
 	pattern16 = 0x00;
 	for (i = 0; i < (len >> 1); i++) {
 		if (MEM16_BASE[i] != pattern16++) {
-			vfree(ptr);
 			/* return -5; */
 			ret = -5;
 			goto fail;
@@ -922,7 +940,6 @@ int Binning_DRAM_complex_mem_test(void)
 	pattern32 = 0x00;
 	for (i = 0; i < (len >> 2); i++) {
 		if (MEM32_BASE[i] != pattern32++) {
-			vfree(ptr);
 			/* return -6; */
 			ret = -6;
 			goto fail;
@@ -936,7 +953,6 @@ int Binning_DRAM_complex_mem_test(void)
 	/* === Read Check then Fill Memory with a5a5a5a5 Pattern === */
 	for (i = 0; i < size; i++) {
 		if (MEM32_BASE[i] != 0x44332211) {
-			vfree(ptr);
 			/* return -7; */
 			ret = -7;
 			goto fail;
@@ -949,7 +965,6 @@ int Binning_DRAM_complex_mem_test(void)
 	00 Byte Pattern at offset 0h === */
 	for (i = 0; i < size; i++) {
 		if (MEM32_BASE[i] != 0xa5a5a5a5) {
-			vfree(ptr);
 			/* return -8; */
 			ret = -8;
 			goto fail;
@@ -962,7 +977,6 @@ int Binning_DRAM_complex_mem_test(void)
 	00 Byte Pattern at offset 2h === */
 	for (i = 0; i < size; i++) {
 		if (MEM32_BASE[i] != 0xa5a5a500) {
-			vfree(ptr);
 			/* return -9; */
 			ret = -9;
 			goto fail;
@@ -975,7 +989,6 @@ int Binning_DRAM_complex_mem_test(void)
 	00 Byte Pattern at offset 1h === */
 	for (i = 0; i < size; i++) {
 		if (MEM32_BASE[i] != 0xa500a500) {
-			vfree(ptr);
 			/* return -10; */
 			ret = -10;
 			goto fail;
@@ -988,7 +1001,6 @@ int Binning_DRAM_complex_mem_test(void)
 	00 Byte Pattern at offset 3h === */
 	for (i = 0; i < size; i++) {
 		if (MEM32_BASE[i] != 0xa5000000) {
-			vfree(ptr);
 			/* return -11; */
 			ret = -11;
 			goto fail;
@@ -1001,7 +1013,6 @@ int Binning_DRAM_complex_mem_test(void)
 	Word Pattern at offset 1h == */
 	for (i = 0; i < size; i++) {
 		if (MEM32_BASE[i] != 0x00000000) {
-			vfree(ptr);
 			/* return -12; */
 			ret = -12;
 			goto fail;
@@ -1014,7 +1025,6 @@ int Binning_DRAM_complex_mem_test(void)
 	Word Pattern at offset 0h == */
 	for (i = 0; i < size; i++) {
 		if (MEM32_BASE[i] != 0xffff0000) {
-			vfree(ptr);
 			/* return -13; */
 			ret = -13;
 			goto fail;
@@ -1025,7 +1035,6 @@ int Binning_DRAM_complex_mem_test(void)
     /*===  Read Check === */
 	for (i = 0; i < size; i++) {
 		if (MEM32_BASE[i] != 0xffffffff) {
-			vfree(ptr);
 			/* return -14; */
 			ret = -14;
 			goto fail;
@@ -1045,7 +1054,6 @@ int Binning_DRAM_complex_mem_test(void)
 		value = MEM_BASE[i];
 
 		if (value != PATTERN1) {
-			vfree(ptr);
 			/* return -15; */
 			ret = -15;
 			goto fail;
@@ -1057,7 +1065,6 @@ int Binning_DRAM_complex_mem_test(void)
 	for (i = 0; i < size; i++) {
 		value = MEM_BASE[i];
 		if (value != PATTERN2) {
-			vfree(ptr);
 			/* return -16; */
 			ret = -16;
 			goto fail;
@@ -1069,7 +1076,6 @@ int Binning_DRAM_complex_mem_test(void)
 	for (i = 0; i < size; i++) {
 		value = MEM_BASE[i];
 		if (value != PATTERN1) {
-			vfree(ptr);
 			/* return -17; */
 			ret = -17;
 			goto fail;
@@ -1081,7 +1087,6 @@ int Binning_DRAM_complex_mem_test(void)
 	for (i = 0; i < size; i++) {
 		value = MEM_BASE[i];
 		if (value != PATTERN2) {
-			vfree(ptr);
 			/* return -18; */
 			ret = -18;
 			goto fail;
@@ -1093,7 +1098,6 @@ int Binning_DRAM_complex_mem_test(void)
 	for (i = 0; i < size; i++) {
 		value = MEM_BASE[i];
 		if (value != PATTERN1) {
-			vfree(ptr);
 			/* return -19; */
 			ret = -19;
 			goto fail;
@@ -1139,7 +1143,6 @@ int Binning_DRAM_complex_mem_test(void)
 	for (i = 0; i < size; i++) {
 		value = MEM_BASE[i];
 		if (value != 0x12345678) {
-			vfree(ptr);
 			/* return -20; */
 			ret = -20;
 			goto fail;
@@ -1157,7 +1160,6 @@ int Binning_DRAM_complex_mem_test(void)
 		if (i < size * 4 - 1)
 			MEM8_BASE[waddr8] = pattern8 + 1;
 		if (MEM8_BASE[raddr8] != pattern8) {
-			vfree(ptr);
 			/* return -21; */
 			ret = -21;
 			goto fail;
@@ -1172,7 +1174,6 @@ int Binning_DRAM_complex_mem_test(void)
 		if (i < size * 2 - 1)
 			MEM16_BASE[i + 1] = pattern16 + 1;
 		if (MEM16_BASE[i] != pattern16) {
-			vfree(ptr);
 			/* return -22; */
 			ret = -22;
 			goto fail;
@@ -1186,7 +1187,6 @@ int Binning_DRAM_complex_mem_test(void)
 		if (i < size - 1)
 			MEM32_BASE[i + 1] = pattern32 + 1;
 		if (MEM32_BASE[i] != pattern32) {
-			vfree(ptr);
 			/* return -23; */
 			ret = -23;
 			goto fail;
@@ -1411,8 +1411,8 @@ int dram_dummy_read_reserve_mem_of_init(struct reserved_mem *rmem)
 
 	if (strstr(DRAM_R0_DUMMY_READ_RESERVED_KEY, rmem->name)) {
 		if (rsize < DRAM_RSV_SIZE) {
-			pr_err("[DRAMC] Can NOT reserve memory for Rank0\n");
 			old_IC_No_DummyRead = 1;
+			dramc_rsv_aee_warn("dram dummy read reserve fail on rank0 !!! (rsize:%d)\n", rsize);
 			return 0;
 		}
 		dram_rank0_addr = rptr;
@@ -1423,8 +1423,8 @@ int dram_dummy_read_reserve_mem_of_init(struct reserved_mem *rmem)
 
 	if (strstr(DRAM_R1_DUMMY_READ_RESERVED_KEY, rmem->name)) {
 		if (rsize < DRAM_RSV_SIZE) {
-			pr_err("[DRAMC] Can NOT reserve memory for Rank1\n");
 			old_IC_No_DummyRead = 1;
+			dramc_rsv_aee_warn("dram dummy read reserve fail on rank1 !!! (rsize:%d)\n", rsize);
 			return 0;
 		}
 		dram_rank1_addr = rptr;

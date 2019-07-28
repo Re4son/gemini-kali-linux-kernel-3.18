@@ -127,8 +127,6 @@
 #include <mach/mt_clkmgr.h>
 
 #include <linux/gpio.h>
-
-
 #ifdef CONFIG_MTK_ICUSB_SUPPORT
 
 struct my_attr skip_session_req_attr = {

@@ -44,19 +44,19 @@ extern
 #define K_DEBUG	(1<<0)
 
 /*Set the debug level at musb_core.c*/
-extern u32 debug_level;
+extern int debug_level;
 
 #ifdef USE_SSUSB_QMU
 #define qmu_printk(level, fmt, args...) do { \
 		if (debug_level & (level|K_QMU)) { \
-			pr_err("[U3D][Q]" fmt, ## args); \
+			pr_notice("[U3D][Q]" fmt, ## args); \
 		} \
 	} while (0)
 #endif
 
 #define os_printk(level, fmt, args...) do { \
 		if (debug_level & level) { \
-			pr_err("[U3D]" fmt, ## args); \
+			pr_notice("[U3D]" fmt, ## args); \
 		} \
 	} while (0)
 

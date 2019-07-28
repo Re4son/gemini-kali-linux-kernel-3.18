@@ -71,7 +71,7 @@
 
 #include <trace/events/pagemap.h>
 
-#ifdef CONFIG_MTK_EXTMEM
+#ifdef CONFIG_MTK_USE_RESERVED_EXT_MEM
 #include <linux/exm_driver.h>
 #endif
 
@@ -1752,7 +1752,7 @@ int remap_pfn_range(struct vm_area_struct *vma, unsigned long addr,
 	 * un-COW'ed pages by matching them up with "vma->vm_pgoff".
 	 * See vm_normal_page() for details.
 	 */
-#ifdef CONFIG_MTK_EXTMEM
+#ifdef CONFIG_MTK_USE_RESERVED_EXT_MEM
 	if (addr == vma->vm_start && end == vma->vm_end)
 		vma->vm_pgoff = pfn;
 	else if (is_cow_mapping(vma->vm_flags))
@@ -2612,40 +2612,6 @@ out_release:
 }
 
 /*
- * This is like a special single-page "expand_{down|up}wards()",
- * except we must first make sure that 'address{-|+}PAGE_SIZE'
- * doesn't hit another vma.
- */
-static inline int check_stack_guard_page(struct vm_area_struct *vma, unsigned long address)
-{
-	address &= PAGE_MASK;
-	if ((vma->vm_flags & VM_GROWSDOWN) && address == vma->vm_start) {
-		struct vm_area_struct *prev = vma->vm_prev;
-
-		/*
-		 * Is there a mapping abutting this one below?
-		 *
-		 * That's only ok if it's the same stack mapping
-		 * that has gotten split..
-		 */
-		if (prev && prev->vm_end == address)
-			return prev->vm_flags & VM_GROWSDOWN ? 0 : -ENOMEM;
-
-		return expand_downwards(vma, address - PAGE_SIZE);
-	}
-	if ((vma->vm_flags & VM_GROWSUP) && address + PAGE_SIZE == vma->vm_end) {
-		struct vm_area_struct *next = vma->vm_next;
-
-		/* As VM_GROWSDOWN but s/below/above/ */
-		if (next && next->vm_start == address + PAGE_SIZE)
-			return next->vm_flags & VM_GROWSUP ? 0 : -ENOMEM;
-
-		return expand_upwards(vma, address + PAGE_SIZE);
-	}
-	return 0;
-}
-
-/*
  * We enter with non-exclusive mmap_sem (to exclude vma changes,
  * but allow concurrent faults), and pte mapped but not yet locked.
  * We return with mmap_sem still held, but pte unmapped and unlocked.
@@ -2664,10 +2630,6 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	/* File mapping without ->vm_ops ? */
 	if (vma->vm_flags & VM_SHARED)
 		return VM_FAULT_SIGBUS;
-
-	/* Check if we need to add a guard page to the stack */
-	if (check_stack_guard_page(vma, address) < 0)
-		return VM_FAULT_SIGSEGV;
 
 	/* Use the zero-page for reads */
 	if (!(flags & FAULT_FLAG_WRITE)) {
@@ -3244,7 +3206,6 @@ static int handle_pte_fault(struct mm_struct *mm,
 			if (vma->vm_ops)
 				return do_linear_fault(mm, vma, address,
 						pte, pmd, flags, entry);
-
 			return do_anonymous_page(mm, vma, address,
 						 pte, pmd, flags);
 		}
@@ -3628,7 +3589,7 @@ static int __access_remote_vm(struct task_struct *tsk, struct mm_struct *mm,
 		ret = get_user_pages(tsk, mm, addr, 1,
 				write, 1, &page, &vma);
 		if (ret <= 0) {
-#ifdef CONFIG_MTK_EXTMEM
+#ifdef CONFIG_MTK_USE_RESERVED_EXT_MEM
 			if (!write) {
 				vma = find_vma(mm, addr);
 				if (!vma || vma->vm_start > addr)

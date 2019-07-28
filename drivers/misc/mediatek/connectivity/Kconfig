@@ -132,6 +132,14 @@ config MTK_COMBO_CHIP_CONSYS_6580
 	  is
 	  MT6580
 
+config MTK_COMBO_CHIP_CONSYS_6570
+	bool "CONSYS_6570"
+	help
+	  this config is used to decided SOC consys version
+	  in current platform
+	  is
+	  MT6570
+
 config MTK_COMBO_CHIP_CONSYS_6797
 	bool "CONSYS_6797"
 	help
@@ -158,6 +166,7 @@ config MTK_COMBO_CHIP
 	default "CONSYS_8163" if MTK_COMBO_CHIP_CONSYS_8163
 	default "CONSYS_6735" if MTK_COMBO_CHIP_CONSYS_6735
 	default "CONSYS_6580" if MTK_COMBO_CHIP_CONSYS_6580
+	default "CONSYS_6570" if MTK_COMBO_CHIP_CONSYS_6570
 	default "CONSYS_6797" if MTK_COMBO_CHIP_CONSYS_6797
 	help
 	  this feature is used to identify combo chip version or SOC chip
@@ -222,12 +231,6 @@ config MTK_COMBO_BT
 	help
 	  MTK BT /dev/stpbt driver for Bluedroid
 
-config MTK_COMBO_BT_HCI
-	tristate "MediaTek Combo Chip BlueZ driver"
-	depends on BT && MTK_COMBO
-	help
-	  MTK BT driver for BlueZ (hci_stp.ko)
-
 config MTK_COMBO_ANT
 	tristate "MediaTek Combo Chip ANT driver"
 	depends on MTK_COMBO
@@ -288,7 +291,7 @@ config MTK_DHCPV6C_WIFI
 config MTK_CONN_LTE_IDC_SUPPORT
 	bool "MediaTek CONN LTE IDC support"
 	select MTK_CONN_MD
-	default y
+	default y if MTK_ECCCI_DRIVER
 	help
 	  This option enables CONN LTE IDC support
 

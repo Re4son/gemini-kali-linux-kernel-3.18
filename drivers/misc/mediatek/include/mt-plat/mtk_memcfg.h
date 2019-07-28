@@ -25,6 +25,19 @@
 
 #ifdef CONFIG_MTK_MEMCFG
 
+extern int kptr_restrict;
+#define MAX_FREE_RESERVED 20
+
+struct freed_reserved_memory {
+	phys_addr_t start;
+	phys_addr_t end;
+};
+
+extern struct freed_reserved_memory freed_reserved_memory[MAX_FREE_RESERVED];
+extern int freed_reserved_memory_count;
+
+void mtk_memcfg_record_freed_reserved(phys_addr_t start, phys_addr_t end);
+
 #include <linux/memblock.h>
 extern int memblock_reserve_count;
 extern struct memblock_record memblock_record[MAX_MEMBLOCK_RECORD];
@@ -40,6 +53,9 @@ extern struct kernel_reserve_meminfo kernel_reserve_meminfo;
 extern void mtk_memcfg_write_memory_layout_buf(char *, ...);
 extern void mtk_memcfg_late_warning(unsigned long);
 
+#include <mt-plat/mtk_memcfg_reserve_info.h>
+int check_mblock_support(void);
+int parse_memory_layout_buf(struct reserved_mem_ext *reserved_mem);
 void mtk_memcfg_write_memory_layout_info(int type, const char *name,
 		unsigned long start, unsigned long size);
 
@@ -61,10 +77,11 @@ extern unsigned long totalhigh_pages;
 #endif /* end of CONFIG_HIGHMEM */
 
 extern void split_page(struct page *page, unsigned int order);
+extern void mtk_memcfg_inform_vmpressure(bool to_trigger);
 
 #else
 
-#define MTK_MEMCFG_LOG_AND_PRINTK(fmt, arg...) pr_alert(fmt, ##arg)
+#define MTK_MEMCFG_LOG_AND_PRINTK(fmt, arg...) pr_info(fmt, ##arg)
 
 #define mtk_memcfg_get_force_inode_gfp_lowmem()  do { } while (0)
 #define mtk_memcfg_set_force_inode_gfp_lowmem(flag)  do { } while (0)
@@ -73,6 +90,8 @@ extern void split_page(struct page *page, unsigned int order);
 #define mtk_memcfg_write_memory_layout_buf(fmt, arg...) do { } while (0)
 #define mtk_memcfg_late_warning(flag) do { } while (0)
 #define mtk_memcfg_write_memory_layout_info(arg...) do { } while (0)
+#define mtk_memcfg_record_freed_reserved(start, end) do {} while (0)
+#define mtk_memcfg_inform_vmpressure(to_trigger) do { } while (0)
 #endif /* end CONFIG_MTK_MEMCFG */
 
 #endif /* end __MTK_MEMCFG_H__ */

@@ -78,8 +78,30 @@
 #define RET_SUCCESS 0
 #define RET_FAIL 1
 
-struct xhci_hcd *mtk_xhci;
+extern unsigned int aeon_gpio_get(const char *name);
+extern int aeon_gpio_set(const char *name);
+
+#ifdef CONFIG_TCPC_CLASS
+#include "tcpm.h"
+#include <linux/workqueue.h>
+#include <linux/mutex.h>
+static struct notifier_block otg_nb;
+static bool usbc_otg_attached;
+static struct tcpc_device *otg_tcpc_dev;
+static struct workqueue_struct *otg_tcpc_power_workq;
+static struct workqueue_struct *otg_tcpc_workq;
+static struct work_struct tcpc_otg_power_work;
+static struct work_struct tcpc_otg_work;
+static bool usbc_otg_power_enable;
+static bool usbc_otg_enable;
+static struct mutex tcpc_otg_lock;
+static struct mutex tcpc_otg_pwr_lock;
+static bool tcpc_boost_on;
+#else /* not defined CONFIG_TCPC_CLASS */
 static int vbus_on;
+#endif /* CONFIG_TCPC_CLASS */
+
+struct xhci_hcd *mtk_xhci;
 
 static struct wake_lock mtk_xhci_wakelock;
 
@@ -140,11 +162,11 @@ static enum idpin_state mtk_idpin_cur_stat = IDPIN_OUT;
 static struct switch_dev mtk_otg_state;
 
 static struct delayed_work mtk_xhci_delaywork;
-u32 xhci_debug_level = K_ALET | K_CRIT | K_ERR | K_WARNIN;
+int xhci_debug_level = K_ALET | K_CRIT | K_ERR | K_WARNIN;
 
 int mtk_iddig_debounce = 50;
-module_param(mtk_iddig_debounce, int, 0644);
-module_param(xhci_debug_level, int, 0644);
+module_param(mtk_iddig_debounce, int, 0400);
+module_param(xhci_debug_level, int, 0400);
 
 void switch_int_to_host_and_mask(void)
 {
@@ -424,6 +446,10 @@ int mtk_is_hub_active(void)
 #endif
 static void mtk_enable_otg_mode(void)
 {
+
+    printk("%s().\n",__func__);    
+    aeon_gpio_set("usb0_drvvbus_high");
+
 #if defined(CONFIG_MTK_BQ25898_DUAL_SUPPORT)
 	bq25898_otg_en(0x01);
 	bq25898_set_boost_ilim(0x01);
@@ -447,6 +473,9 @@ static void mtk_enable_otg_mode(void)
 
 static void mtk_disable_otg_mode(void)
 {
+    printk("%s().\n",__func__);
+    aeon_gpio_set("usb0_drvvbus_low");
+    
 #if defined(CONFIG_MTK_BQ25898_DUAL_SUPPORT)
 	bq25898_otg_en(0x0);
 #else
@@ -458,6 +487,7 @@ static void mtk_disable_otg_mode(void)
 #endif	
 	//set_chr_enable_otg(0x0);
 #endif
+
 }
 
 static int mtk_xhci_hcd_init(void)
@@ -535,8 +565,87 @@ static void mtk_xhci_imod_set(u32 imod)
 	writel(temp, &mtk_xhci->ir_set->irq_control);
 }
 
+static struct delayed_work host_plug_test_work;
+static int host_plug_test_enable; /* default disable */
+module_param(host_plug_test_enable, int, 0400);
+static int host_plug_in_test_period_ms = 5000;
+module_param(host_plug_in_test_period_ms, int, 0400);
+static int host_plug_out_test_period_ms = 5000;
+module_param(host_plug_out_test_period_ms, int, 0400);
+static int host_test_vbus_off_time_us = 3000;
+module_param(host_test_vbus_off_time_us, int, 0400);
+static int host_test_vbus_only = 1;
+module_param(host_test_vbus_only, int, 0400);
+static int host_plug_test_triggered;
+static int host_req;
+static struct wake_lock host_test_wakelock;
+static int _mtk_xhci_driver_load(void);
+static void _mtk_xhci_driver_unload(void);
+static void do_host_plug_test_work(struct work_struct *data)
+{
+	static ktime_t ktime_begin, ktime_end;
+	static s64 diff_time;
+	static int host_on;
+	static int wake_lock_inited;
 
-static int mtk_xhci_driver_load(void)
+	if (!wake_lock_inited) {
+		mtk_xhci_mtk_printk(K_ALET, "%s wake_lock_init\n", __func__);
+		wake_lock_init(&host_test_wakelock, WAKE_LOCK_SUSPEND, "host.test.lock");
+		wake_lock_inited = 1;
+	}
+
+	host_plug_test_triggered = 1;
+	/* sync global status */
+	mb();
+	wake_lock(&host_test_wakelock);
+	mtk_xhci_mtk_printk(K_ALET, "BEGIN");
+	ktime_begin = ktime_get();
+
+	host_on  = 1;
+	while (1) {
+		if (!host_req && host_on) {
+			mtk_xhci_mtk_printk(K_ALET, "about to exit, host_on<%d>\n", host_on);
+			break;
+		}
+		msleep(50);
+
+		ktime_end = ktime_get();
+		diff_time = ktime_to_ms(ktime_sub(ktime_end, ktime_begin));
+		if (host_on && diff_time >= host_plug_in_test_period_ms) {
+			host_on = 0;
+			mtk_xhci_mtk_printk(K_ALET, "OFF\n");
+
+			ktime_begin = ktime_get();
+
+			/* simulate plug out */
+			mtk_disable_otg_mode();
+			udelay(host_test_vbus_off_time_us);
+
+			if (!host_test_vbus_only)
+				_mtk_xhci_driver_unload();
+		} else if (!host_on && diff_time >= host_plug_out_test_period_ms) {
+			host_on = 1;
+			mtk_xhci_mtk_printk(K_ALET, "ON\n");
+
+			ktime_begin = ktime_get();
+			if (!host_test_vbus_only)
+				_mtk_xhci_driver_load();
+
+			mtk_enable_otg_mode();
+			msleep(100);
+		}
+	}
+
+	/* from ON to OFF state */
+	msleep(1000);
+	_mtk_xhci_driver_unload();
+
+	host_plug_test_triggered = 0;
+	wake_unlock(&host_test_wakelock);
+	mtk_xhci_mtk_printk(K_ALET, "END\n");
+}
+
+static int _mtk_xhci_driver_load(void)
 {
 	int ret = 0;
 
@@ -557,6 +666,9 @@ static int mtk_xhci_driver_load(void)
 	mtk_enable_otg_mode();
 	enableXhciAllPortPower(mtk_xhci);
 
+	if (host_plug_test_enable && !host_plug_test_triggered)
+		schedule_delayed_work(&host_plug_test_work, 0);
+
 	return 0;
 
 _err:
@@ -567,13 +679,7 @@ _err:
 	return ret;
 }
 
-static void mtk_xhci_disPortPower(void)
-{
-	mtk_disable_otg_mode();
-	disableXhciAllPortPower(mtk_xhci);
-}
-
-static void mtk_xhci_driver_unload(void)
+static void _mtk_xhci_driver_unload(void)
 {
 	mtk_xhci_hcd_cleanup();
 	/* close clock/power setting and assert reset bit of mac */
@@ -582,6 +688,40 @@ static void mtk_xhci_driver_unload(void)
 #endif
 
 }
+
+int mtk_xhci_driver_load(void)
+{
+	static int host_plug_test_work_inited;
+
+	host_req = 1;
+
+	if (!host_plug_test_work_inited) {
+		INIT_DELAYED_WORK(&host_plug_test_work, do_host_plug_test_work);
+		host_plug_test_work_inited = 1;
+	}
+
+	if (host_plug_test_triggered)
+		return 0;
+
+	return _mtk_xhci_driver_load();
+}
+
+void mtk_xhci_driver_unload(void)
+{
+	host_req = 0;
+
+	if (host_plug_test_triggered)
+		return;
+
+	_mtk_xhci_driver_unload();
+}
+
+static void mtk_xhci_disPortPower(void)
+{
+	mtk_disable_otg_mode();
+	disableXhciAllPortPower(mtk_xhci);
+}
+
 
 void mtk_xhci_switch_init(void)
 {
@@ -669,6 +809,8 @@ done:
 
 static irqreturn_t xhci_eint_iddig_isr(int irqnum, void *data)
 {
+    printk("%s().\n",__func__);
+
 	disable_irq_nosync(irqnum);
 	schedule_delayed_work(&mtk_xhci_delaywork, msecs_to_jiffies(mtk_iddig_debounce));
 	/* microseconds */
@@ -782,8 +924,108 @@ void mtk_set_host_mode_out(void)
 
 bool mtk_is_host_mode(void)
 {
+#ifdef CONFIG_TCPC_CLASS
+	return tcpc_boost_on;
+#else
 	return (vbus_on > 0 || mtk_idpin_cur_stat == IDPIN_IN_HOST) ? true : false;
+#endif /* CONFIG_TCPC_CLASS */
 }
+
+#ifdef CONFIG_TCPC_CLASS
+int tcpc_otg_enable(void)
+{
+	int ret = 0;
+
+	if (!usbc_otg_attached) {
+		/* mtk_idpin_cur_stat = IDPIN_IN_HOST; */
+		ret = mtk_xhci_driver_load();
+		if (!ret) {
+			mtk_xhci_wakelock_lock();
+			switch_set_state(&mtk_otg_state, 1);
+		}
+		usbc_otg_attached = true;
+	}
+	return ret;
+}
+
+int tcpc_otg_disable(void)
+{
+	if (usbc_otg_attached) {
+		/* USB PLL Force settings */
+		usb20_pll_settings(true, false);
+		mtk_xhci_driver_unload();
+		switch_set_state(&mtk_otg_state, 0);
+		mtk_xhci_wakelock_unlock();
+		/* mtk_idpin_cur_stat = IDPIN_OUT; */
+		usbc_otg_attached = false;
+	}
+	return 0;
+}
+
+static void tcpc_otg_work_call(struct work_struct *work)
+{
+	bool enable;
+
+	mutex_lock(&tcpc_otg_lock);
+	enable = usbc_otg_enable;
+	mutex_unlock(&tcpc_otg_lock);
+
+	if (enable)
+		tcpc_otg_enable();
+	else
+		tcpc_otg_disable();
+}
+
+static void tcpc_otg_power_work_call(struct work_struct *work)
+{
+	mutex_lock(&tcpc_otg_pwr_lock);
+	if (usbc_otg_power_enable) {
+		if (!tcpc_boost_on) {
+			mtk_enable_otg_mode();
+			tcpc_boost_on = true;
+		}
+	} else {
+		if (tcpc_boost_on) {
+			mtk_disable_otg_mode();
+			tcpc_boost_on = false;
+		}
+	}
+	mutex_unlock(&tcpc_otg_pwr_lock);
+}
+
+static int otg_tcp_notifier_call(struct notifier_block *nb,
+		unsigned long event, void *data)
+{
+	struct tcp_notify *noti = data;
+
+	switch (event) {
+	case TCP_NOTIFY_SOURCE_VBUS:
+		pr_info("%s source vbus = %dmv\n",
+				__func__, noti->vbus_state.mv);
+		mutex_lock(&tcpc_otg_pwr_lock);
+		usbc_otg_power_enable = (noti->vbus_state.mv) ? true : false;
+		mutex_unlock(&tcpc_otg_pwr_lock);
+		queue_work(otg_tcpc_power_workq, &tcpc_otg_power_work);
+		break;
+	case TCP_NOTIFY_TYPEC_STATE:
+		if (noti->typec_state.new_state == TYPEC_ATTACHED_SRC) {
+			pr_info("%s OTG Plug in\n", __func__);
+			mutex_lock(&tcpc_otg_lock);
+			usbc_otg_enable = true;
+			mutex_unlock(&tcpc_otg_lock);
+		} else if (noti->typec_state.old_state == TYPEC_ATTACHED_SRC &&
+				noti->typec_state.new_state == TYPEC_UNATTACHED) {
+			pr_info("%s OTG Plug out\n", __func__);
+			mutex_lock(&tcpc_otg_lock);
+			usbc_otg_enable = false;
+			mutex_unlock(&tcpc_otg_lock);
+		}
+		queue_work(otg_tcpc_workq, &tcpc_otg_work);
+		break;
+	}
+	return NOTIFY_OK;
+}
+#endif /* CONFIG_TCPC_CLASS */
 
 void mtk_unload_xhci_on_ipo(void)
 {
@@ -856,6 +1098,7 @@ static ssize_t otg_mode_store(struct device *dev, struct device_attribute *attr,
 static int otg_switch_probe(struct platform_device *pdev)
 {
 	int retval = 0;
+    printk("%s().\n",__func__);
 
 	pinctrl = devm_pinctrl_get(&pdev->dev);
 	if (IS_ERR(pinctrl)) {
@@ -914,6 +1157,7 @@ static struct platform_driver otg_switch_driver = {
 #endif
 
 #ifdef CONFIG_USB_C_SWITCH
+#ifndef CONFIG_TCPC_CLASS
 static int typec_otg_enable(void *data)
 {
 	int ret = 0;
@@ -947,6 +1191,7 @@ static struct typec_switch_data typec_host_driver = {
 	.enable = typec_otg_enable,
 	.disable = typec_otg_disable,
 };
+#endif /* if not CONFIG_TCPC_CLASS */
 #endif
 
 
@@ -954,8 +1199,10 @@ void mtk_xhci_wakelock_init(void)
 {
 	wake_lock_init(&mtk_xhci_wakelock, WAKE_LOCK_SUSPEND, "xhci.wakelock");
 #ifdef CONFIG_USB_C_SWITCH
+#ifndef CONFIG_TCPC_CLASS
 	typec_host_driver.priv_data = NULL;
 	register_typec_switch_callback(&typec_host_driver);
+#endif /* if not CONFIG_TCPC_CLASS */
 #endif
 }
 
@@ -1430,9 +1677,33 @@ module_exit(xhci_hcd_cleanup);
 #else /*CONFIG_USB_MTK_DUALMODE*/
 static int __init xhci_hcd_init(void)
 {
+#ifdef CONFIG_TCPC_CLASS
+	int ret;
+#endif /* CONFIG_TCPC_CLASS */
+
 	mtk_xhci_eint_iddig_init();
 	mtk_xhci_switch_init();
 	mtk_xhci_wakelock_init();
+#ifdef CONFIG_TCPC_CLASS
+	mutex_init(&tcpc_otg_lock);
+	mutex_init(&tcpc_otg_pwr_lock);
+	otg_tcpc_workq = create_singlethread_workqueue("tcpc_otg_workq");
+	otg_tcpc_power_workq = create_singlethread_workqueue("tcpc_otg_power_workq");
+	INIT_WORK(&tcpc_otg_power_work, tcpc_otg_power_work_call);
+	INIT_WORK(&tcpc_otg_work, tcpc_otg_work_call);
+	otg_tcpc_dev = tcpc_dev_get_by_name("type_c_port0");
+	if (!otg_tcpc_dev) {
+		pr_err("%s get tcpc device type_c_port0 fail\n", __func__);
+		return -ENODEV;
+	}
+
+	otg_nb.notifier_call = otg_tcp_notifier_call;
+	ret = register_tcp_dev_notifier(otg_tcpc_dev, &otg_nb);
+	if (ret < 0) {
+		pr_err("%s register tcpc notifer fail\n", __func__);
+		return -EINVAL;
+	}
+#endif /* CONFIG_TCPC_CLASS */
 	return 0;
 }
 

@@ -17,6 +17,8 @@
 #include "ext4.h"
 #include "xattr.h"
 
+struct kmem_cache *ext4_crypt_info_cachep_bak;
+
 static void derive_crypt_complete(struct crypto_async_request *req, int rc)
 {
 	struct ext4_completion_result *ecr = req->data;
@@ -133,6 +135,14 @@ int ext4_get_encryption_info(struct inode *inode)
 		res = ext4_init_crypto();
 		if (res)
 			return res;
+		ext4_crypt_info_cachep_bak = ext4_crypt_info_cachep;
+	}
+	if (ext4_crypt_info_cachep_bak != ext4_crypt_info_cachep ||
+	    (ext4_crypt_info_cachep_bak == NULL)) {
+		pr_notice("ext4_crypt_info_cachep_bak at %p\n",
+			ext4_crypt_info_cachep_bak);
+		pr_notice("ext4_crypt_info_cachep at %p\n",
+			ext4_crypt_info_cachep);
 	}
 
 	res = ext4_xattr_get(inode, EXT4_XATTR_INDEX_ENCRYPTION,
@@ -197,26 +207,32 @@ int ext4_get_encryption_info(struct inode *inode)
 		goto out;
 	}
 	if (keyring_key->type != &key_type_logon) {
-		printk_once("ext4: key type must be logon\n");
+		printk_once(KERN_WARNING
+			    "ext4: key type must be logon\n");
 		res = -ENOKEY;
 		goto out;
 	}
+	down_read(&keyring_key->sem);
 	ukp = ((struct user_key_payload *)keyring_key->payload.data);
 	if (ukp->datalen != sizeof(struct ext4_encryption_key)) {
 		res = -EINVAL;
+		up_read(&keyring_key->sem);
 		goto out;
 	}
 	master_key = (struct ext4_encryption_key *)ukp->data;
 	BUILD_BUG_ON(EXT4_AES_128_ECB_KEY_SIZE !=
 		     EXT4_KEY_DERIVATION_NONCE_SIZE);
 	if (master_key->size != EXT4_AES_256_XTS_KEY_SIZE) {
-		printk_once("ext4: key size incorrect: %d\n",
-				master_key->size);
+		printk_once(KERN_WARNING
+			    "ext4: key size incorrect: %d\n",
+			    master_key->size);
 		res = -ENOKEY;
+		up_read(&keyring_key->sem);
 		goto out;
 	}
 	res = ext4_derive_key_aes(ctx.nonce, master_key->raw,
 				  raw_key);
+	up_read(&keyring_key->sem);
 	if (res)
 		goto out;
 got_key:
@@ -244,7 +260,7 @@ out:
 		res = 0;
 	key_put(keyring_key);
 	ext4_free_crypt_info(crypt_info);
-	memset(raw_key, 0, sizeof(raw_key));
+	memzero_explicit(raw_key, sizeof(raw_key));
 	return res;
 }
 

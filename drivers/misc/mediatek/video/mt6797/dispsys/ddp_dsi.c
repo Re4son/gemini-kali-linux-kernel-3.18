@@ -1991,8 +1991,8 @@ UINT32 DSI_dcs_read_lcm_reg_v2(DISP_MODULE_ENUM module, cmdqRecHandle cmdq, UINT
 	DSI_RX_DATA_REG read_data1;
 	DSI_RX_DATA_REG read_data2;
 	DSI_RX_DATA_REG read_data3;
-	DSI_T0_INS t0;
-	DSI_T0_INS t1;
+	DSI_T0_INS t0 = { 0 };
+	DSI_T0_INS t1 = { 0 };
 	static const long WAIT_TIMEOUT = 2 * HZ;	/* 2 sec */
 	long ret;
 	int timeout = 0;
@@ -2254,8 +2254,8 @@ void DSI_set_cmdq_V2(DISP_MODULE_ENUM module, cmdqRecHandle cmdq, unsigned cmd, 
 	UINT32 i = 0;
 	int d = 0;
 	unsigned long goto_addr, mask_para, set_para;
-	DSI_T0_INS t0;
-	DSI_T2_INS t2;
+	DSI_T0_INS t0 = { 0 };
+	DSI_T2_INS t2 = { 0 };
 
 	/* DISPFUNC(); */
 	for (d = DSI_MODULE_BEGIN(module); d <= DSI_MODULE_END(module); d++) {
@@ -2459,9 +2459,9 @@ void DSI_set_cmdq_V3(DISP_MODULE_ENUM module, cmdqRecHandle cmdq, LCM_setting_ta
 	/* UINT32 layer, layer_state, lane_num; */
 	unsigned long goto_addr, mask_para, set_para;
 	/* UINT32 fbPhysAddr, fbVirAddr; */
-	DSI_T0_INS t0;
+	DSI_T0_INS t0 = { 0 };
 	/* DSI_T1_INS t1; */
-	DSI_T2_INS t2;
+	DSI_T2_INS t2 = { 0 };
 	UINT32 index = 0;
 	unsigned char data_id, cmd, count;
 	unsigned char *para_list;
@@ -3218,10 +3218,16 @@ static void DSI_PHY_CLK_LP_PerLine_config(DISP_MODULE_ENUM module, cmdqRecHandle
 void ddp_dsi_update_partial(DISP_MODULE_ENUM module, void *cmdq, void *params)
 {
 	struct disp_rect *roi = (struct disp_rect *)params;
+	unsigned int x = roi->x, y = roi->y;
 
 	DSI_PS_Control(module, cmdq, &(_dsi_context[0].dsi_params),
 			roi->width, roi->height);
-	DSI_Send_ROI(DISP_MODULE_DSI0, cmdq, roi->x, roi->y, roi->width, roi->height);
+
+#ifdef CONFIG_MTK_LCM_PHYSICAL_ROTATION_HW
+	x = _dsi_context[0].lcm_width - (x + roi->width);
+	y = _dsi_context[0].lcm_height - (y + roi->height);
+#endif
+	DSI_Send_ROI(DISP_MODULE_DSI0, cmdq, x, y, roi->width, roi->height);
 }
 
 int ddp_dsi_config(DISP_MODULE_ENUM module, disp_ddp_path_config *config, void *cmdq)

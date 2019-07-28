@@ -1,3 +1,16 @@
+/*
+* Copyright (C) 2016 MediaTek Inc.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 as
+* published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+*/
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -38,7 +51,7 @@
 
 #define SKIP_TIMER
 
-static u32 debug_level = (255);
+static u32 debug_level = (255 - K_DEBUG);
 static struct usbtypc *g_exttypec;
 static struct i2c_client *typec_client;
 static unsigned int usbid_irqnum;
@@ -125,6 +138,8 @@ void fusb300_eint_work(struct work_struct *data)
 			
 			aeon_gpio_set("usb1_drvvbus_high");//GPIO94 high: usb1 drvvbus to high
 			
+			msleep(5); //leave a little time before trying to check for interrupt, improves reliability of HDMI detection
+
 			if (aeon_gpio_get("sil9022_hpd_int")){
 				printk("===hdmi plug in===\n");
 				if(CCXstate == 0x10){
@@ -350,7 +365,6 @@ static int __init fusb300_init(void)
 	int ret = 0;
 	
 	fusb300_gpio_init();
-	
 	if (i2c_add_driver(&usb_i2c_driver) != 0) {
 		fusb_printk(K_ERR, "fusb300_init initialization failed!!\n");
 		ret = -1;

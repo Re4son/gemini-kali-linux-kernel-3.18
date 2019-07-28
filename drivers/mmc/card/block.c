@@ -36,7 +36,6 @@
 #include <linux/compat.h>
 #include <linux/pm_runtime.h>
 
-#define CREATE_TRACE_POINTS
 #include <trace/events/mmc.h>
 
 #include <linux/mmc/ioctl.h>
@@ -50,17 +49,11 @@
 #endif
 
 #include <asm/uaccess.h>
-/*add vmstat info with block tag log*/
-#include <linux/vmstat.h>
-#include <linux/vmalloc.h>
-#include <linux/memblock.h>
 
-#ifdef CONFIG_MTK_EXTMEM
+#ifdef CONFIG_MTK_USE_RESERVED_EXT_MEM
 #include <linux/exm_driver.h>
 #endif
 #include "queue.h"
-#include <linux/time.h>
-#include <linux/debugfs.h>
 #include <linux/cpumask.h>
 #include <linux/kernel_stat.h>
 #include <linux/tick.h>
@@ -1299,6 +1292,9 @@ static inline int mmc_blk_part_switch(struct mmc_card *card,
 	struct mmc_blk_data *main_md = mmc_get_drvdata(card);
 
 #ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
+	/* add for reset emmc when error happen */
+	current_mmc_part_type = md->part_type;
+
 	if (card->host->cmdq_support_changed == 1)
 		card->host->cmdq_support_changed = 0;
 	else
@@ -1698,13 +1694,8 @@ static int mmc_blk_reset(struct mmc_blk_data *md, struct mmc_host *host,
 {
 	int err;
 
-	if (md->reset_done & type) {
-		if  (mmc_card_mmc(host->card)) {
-			pr_err("mmc: have reset before because of error type:%d\n", type);
-			BUG_ON(1);
-		}
+	if (md->reset_done & type)
 		return -EEXIST;
-	}
 
 	md->reset_done |= type;
 	err = mmc_hw_reset(host);
@@ -1929,7 +1920,6 @@ static int mmc_blk_err_check(struct mmc_card *card,
 	struct request *req = mq_mrq->req;
 	int need_retune = card->host->need_retune;
 	int ecc_err = 0, gen_err = 0;
-	u32 status;
 
 	/*
 	 * sbc.error indicates a problem with the set block count
@@ -1989,32 +1979,6 @@ static int mmc_blk_err_check(struct mmc_card *card,
 			       req->rq_disk->disk_name, __func__,
 			       brq->stop.resp[0]);
 			gen_err = 1;
-		}
-		/* Get device status to send stop command to avoid
-		 *  Next command timeout because device in RCV status
-		 */
-		err = get_card_status(card, &status, 5);
-		if (err) {
-			pr_err("%s: error %d requesting status\n",
-			       req->rq_disk->disk_name, err);
-			return MMC_BLK_CMD_ERR;
-		}
-		if (status & R1_ERROR) {
-			pr_err("%s: %s: error sending status cmd, status %#x\n",
-				req->rq_disk->disk_name, __func__, status);
-			gen_err = 1;
-		}
-		if ((R1_CURRENT_STATE(status) == R1_STATE_RCV) &&
-			(status & R1_WP_VIOLATION)) {
-				pr_err("mmc: send stop command because WP\n");
-				err = send_stop(card,
-						DIV_ROUND_UP(brq->data.timeout_ns, 1000000),
-						req, &gen_err, &status);
-				if (err) {
-					pr_err("%s: error %d sending stop command",
-							req->rq_disk->disk_name, err);
-					return MMC_BLK_ABORT;
-				}
 		}
 
 		err = card_busy_detect(card, MMC_BLK_TIMEOUT_MS, false, req,
@@ -2468,7 +2432,7 @@ static void mmc_blk_packed_hdr_wrq_prep(struct mmc_queue_req *mqrq,
 	struct mmc_blk_data *md = mq->data;
 	struct mmc_packed *packed = mqrq->packed;
 	bool do_rel_wr, do_data_tag;
-	u32 *packed_cmd_hdr;
+	__le32 *packed_cmd_hdr;
 	u8 hdr_blocks;
 	u8 i = 1;
 
@@ -2890,7 +2854,7 @@ int mmc_blk_end_queued_req(struct mmc_host *host,
 	struct mmc_card *card = host->card;
 	struct mmc_blk_request *brq;
 	struct mmc_host *mmc;
-	int ret = 1, type;
+	int ret = 1, type, areq_cnt;
 	struct mmc_queue_req *mq_rq;
 	struct request *req;
 	unsigned long flags;
@@ -2984,8 +2948,15 @@ int mmc_blk_end_queued_req(struct mmc_host *host,
 	/*
 	 * one request is removed from queue,
 	 * we wakeup mmcqd to insert new request to queue
+	 * wakeup only when queue full or queue empty
 	 */
-	wake_up_process(mq->thread);
+	areq_cnt = atomic_read(&host->areq_cnt);
+	if (areq_cnt >= host->card->ext_csd.cmdq_depth -
+			EMMC_MIN_RT_CLASS_TAG_COUNT - 1)
+		wake_up_process(mq->thread);
+	else if (areq_cnt == 0)
+		wake_up_interruptible(&host->cmp_que);
+
 	return 1;
 
 cmd_abort:
@@ -3008,8 +2979,14 @@ start_new_req:
 	/*
 	 * one request is removed from queue,
 	 * we wakeup mmcqd to insert new request to queue
+	 * wakeup only when queue full or queue empty
 	 */
-	wake_up_process(mq->thread);
+	areq_cnt = atomic_read(&host->areq_cnt);
+	if (areq_cnt >= host->card->ext_csd.cmdq_depth -
+			EMMC_MIN_RT_CLASS_TAG_COUNT - 1)
+		wake_up_process(mq->thread);
+	else if (areq_cnt == 0)
+		wake_up_interruptible(&host->cmp_que);
 
 	return 0;
 }
@@ -3729,7 +3706,25 @@ static void mmc_blk_shutdown(struct mmc_card *card)
 #ifdef CONFIG_PM
 static int mmc_blk_suspend(struct mmc_card *card)
 {
-	return _mmc_blk_suspend(card);
+	struct mmc_blk_data *md = mmc_get_drvdata(card);
+	int ret;
+
+	ret = _mmc_blk_suspend(card);
+	if (ret)
+		goto out;
+
+	/*
+	 * Make sure partition is the main one when
+	 * suspend.
+	 */
+	if (md) {
+		ret = mmc_blk_part_switch(card, md);
+		if (ret)
+			pr_info("%s: error %d during suspend\n",
+				md->disk->disk_name, ret);
+	}
+out:
+	return ret;
 }
 
 static int mmc_blk_resume(struct mmc_card *card)

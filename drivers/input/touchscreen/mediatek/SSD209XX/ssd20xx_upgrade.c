@@ -860,9 +860,11 @@ static int solomon_firmware_version_check(struct solomon_device *dev,
 		}
 	}
 out:
+	SOLOMON_WARNNING("out!!");	
 	return 0;
 
 update:
+	SOLOMON_WARNNING("update!!");
 	return -1;
 }
 
@@ -921,7 +923,8 @@ int solomon_firmware_update_byfile(struct solomon_device *dev, char *filename)
 #endif
 	SOLOMON_TIME("E92");
 	if (head != NULL) {
-		solomon_reset();
+		solomon_goto_bios();
+		/* solomon_reset(); */
 
 		do {
 			errnum = fw_solomon_init(dev);
@@ -948,12 +951,14 @@ int solomon_get_version_boot(struct solomon_device *dev)
 	return seeprom_get_version_boot(dev);
 }
 
+#ifndef SUPPORT_SSD2025
 u8 *solomon_get_version(struct solomon_device *dev, u8 *ver_buff)
 {
 	memcpy(ver_buff, (u8 *)&(dev->fw_version),
 			sizeof(struct solomon_version));
 	return ver_buff;
 }
+#endif
 
 int solomon_firmware_pre_boot_up_check(struct solomon_device *dev)
 {
@@ -981,13 +986,23 @@ int solomon_firmware_pre_boot_up_check(struct solomon_device *dev)
 		goto update;
 #endif
 	/* version check */
+	printk("[ISP]solomon_firmware_version_check\n");
+	
 	if (solomon_firmware_version_check(dev, &fw_header) < 0)
+	{
+		printk("[ISP] goto update !!\n");
 		goto update;
+	}	
+	else
+	{
+		printk("[ISP] fw_version_check no update !!\n");
+	}
 
 	return -1;
 update:
 //	solomon_reset(); //should be BIOS mode here
 
+	printk("[ISP]fw_solomon_init\n");
 	do {
 		err = fw_solomon_init(dev);
 
@@ -998,9 +1013,19 @@ update:
 	} while ((retry--) > 1);
 
 	if (err >= 0)
-		err = seeprom_firmware_pre_boot_up_check(dev, &fw_header);
+	{
+		printk("[ISP]seeprom_firmware_pre_boot_up_check \n");
+		err = seeprom_firmware_pre_boot_up_check(dev, &fw_header);	
+		printk("[ISP]seeprom_firmware_pre_boot_up_check err = %d\n",err);		
+	}
 
+	printk("[ISP]solomon_bootup_multifw\n");
 	view_error_msg(err);
+
+	printk("[ISP]solomon_bootup_multifw\n");
+	solomon_bootup_multifw();
+	msleep(50);
+
 	return 1;
 }
 
@@ -1033,6 +1058,215 @@ int solomon_firmware_pre_boot_up_check_head(struct solomon_device *dev)
 	SOLOMON_TIME("E01");
 	return err;
 }
+
+/* for fw detect check */
+int solomon_firmware_fw_check(struct solomon_device *dev)      
+{
+	//struct solomon_fw_group_header *fw_header;
+	struct solomon_fw_group *head = NULL, *tail = NULL;
+	struct solomon_fw *ptr = NULL;
+	int err = 0, cnt = 0;
+	u8 *verify_data = NULL;
+	int i = 0;
+
+	SOLOMON_WARNNING("[CHK]solomon_firmware_fw_check\n");
+	
+	cnt = 0;
+	err = solomon_fw_make_link(&head, &tail, &SSL_SYS_CFG);
+	if (err < 0)
+		return err;
+	ptr = &(head->section);
+	SOLOMON_WARNNING("[CHK]section 1 add = 0x%x, len = %d\n",(int)(ptr->address),(ptr->byte_cnt));
+	if ((ptr->byte_cnt)!=0)
+	{
+		verify_data = kmalloc(ptr->byte_cnt+2, GFP_KERNEL);
+		err = ds16_seeprom_read_nbyte(dev, ptr->address, verify_data, ptr->byte_cnt);
+		for (i = 0; i < ptr->byte_cnt; i++) {
+			if (ptr->content[i] != verify_data[i]) 
+			{
+				SOLOMON_WARNNING("miss match %04d W:0x%02x R:0x%02x!\n",i, ptr->content[i], verify_data[i]);
+				cnt++;
+				//goto chk_err;
+			}
+		}	
+		kfree(verify_data);
+		if (cnt > 16)
+			goto chk_err;
+	}
+	
+	err = solomon_fw_make_link(&head, &tail, &SSL_FW_CFG);
+	if (err < 0)
+		return err;
+	ptr = &(tail->section);
+	SOLOMON_WARNNING("[CHK]section 2 add = 0x%x, len = %d\n",(int)(ptr->address),(ptr->byte_cnt));
+	if ((ptr->byte_cnt)!=0)
+	{
+		verify_data = kmalloc(ptr->byte_cnt+2, GFP_KERNEL);
+		err = ds16_seeprom_read_nbyte(dev, ptr->address, verify_data, ptr->byte_cnt);
+		for (i = 0; i < ptr->byte_cnt; i++) {
+			if (ptr->content[i] != verify_data[i]) 
+			{
+				SOLOMON_WARNNING("miss match %04d W:0x%02x R:0x%02x!\n",i, ptr->content[i], verify_data[i]);
+				cnt++;
+			}
+		}	
+		kfree(verify_data);
+		if (cnt > 16)
+			goto chk_err;			
+	}
+		
+  err = solomon_fw_make_link(&head, &tail, &SSL_FW);
+  if (err < 0)
+  	return err;
+  ptr = &(tail->section);
+  SOLOMON_WARNNING("[CHK]section 3 add = 0x%x, len = %d\n",(int)(ptr->address),(ptr->byte_cnt));
+  if ((ptr->byte_cnt)!=0)
+ 	{
+		verify_data = kmalloc(ptr->byte_cnt+2, GFP_KERNEL);
+		err = ds16_seeprom_read_nbyte(dev, ptr->address, verify_data, ptr->byte_cnt);
+		for (i = 0; i < ptr->byte_cnt; i++) {
+			if (ptr->content[i] != verify_data[i]) 
+			{
+				SOLOMON_WARNNING("miss match %04d W:0x%02x R:0x%02x!\n",i, ptr->content[i], verify_data[i]);
+				cnt++;
+			}
+		}	
+		kfree(verify_data);
+	 	if (cnt > 16)
+			goto chk_err;  		
+ 	}
+ 
+  err = solomon_fw_make_link(&head, &tail, &SSL_TMC_REG);
+  if (err < 0)
+  	return err;
+  ptr = &(tail->section);
+  SOLOMON_WARNNING("[CHK]section 4 add = 0x%x, len = %d\n",(int)(ptr->address),(ptr->byte_cnt));
+  if ((ptr->byte_cnt)!=0)
+	{
+		verify_data = kmalloc(ptr->byte_cnt+2, GFP_KERNEL);
+		err = ds16_seeprom_read_nbyte(dev, ptr->address, verify_data, ptr->byte_cnt);
+		for (i = 0; i < ptr->byte_cnt; i++) {
+			if (ptr->content[i] != verify_data[i]) 
+			{
+				SOLOMON_WARNNING("miss match %04d W:0x%02x R:0x%02x!\n",i, ptr->content[i], verify_data[i]);
+				cnt++;
+			}
+		}	
+		kfree(verify_data);
+		if (cnt > 16)
+			goto chk_err;
+  }
+  
+  err = solomon_fw_make_link(&head, &tail, &SSL_DCSW);
+  if (err < 0)
+  	return err;
+  ptr = &(tail->section);
+  SOLOMON_WARNNING("[CHK]section 5 add = 0x%x, len = %d\n",(int)(ptr->address),(ptr->byte_cnt));
+  if ((ptr->byte_cnt)!=0)
+  {
+		verify_data = kmalloc(ptr->byte_cnt+2, GFP_KERNEL);
+		err = ds16_seeprom_read_nbyte(dev, ptr->address, verify_data, ptr->byte_cnt);
+		for (i = 0; i < ptr->byte_cnt; i++) {
+			if (ptr->content[i] != verify_data[i]) 
+			{
+				SOLOMON_WARNNING("miss match %04d W:0x%02x R:0x%02x!\n",i, ptr->content[i], verify_data[i]);
+				cnt++;
+			}
+		}	
+		kfree(verify_data);
+	 	if (cnt > 16)
+			goto chk_err;
+	}
+ 
+  err = solomon_fw_make_link(&head, &tail, &SSL_FDM);
+  if (err < 0)
+  	return err;
+  ptr = &(tail->section);
+  SOLOMON_WARNNING("[CHK]section 6 add = 0x%x, len = %d\n",(int)(ptr->address),(ptr->byte_cnt));
+  if ((ptr->byte_cnt)!=0)
+	{
+		verify_data = kmalloc(ptr->byte_cnt+2, GFP_KERNEL);
+		err = ds16_seeprom_read_nbyte(dev, ptr->address, verify_data, ptr->byte_cnt);
+		for (i = 0; i < ptr->byte_cnt; i++) {
+			if (ptr->content[i] != verify_data[i]) 
+			{
+				SOLOMON_WARNNING("miss match %04d W:0x%02x R:0x%02x!\n",i, ptr->content[i], verify_data[i]);
+				cnt++;
+			}
+		}	
+		kfree(verify_data);
+	 	if (cnt > 16)
+			goto chk_err;
+ 	}
+ 	
+  err = solomon_fw_make_link(&head, &tail, &SSL_MPFPM);
+  if (err < 0)
+  	return err;
+  ptr = &(tail->section);
+  SOLOMON_WARNNING("[CHK]section 7 add = 0x%x, len = %d\n",(int)(ptr->address),(ptr->byte_cnt));
+  if ((ptr->byte_cnt)!=0)
+  {	
+		verify_data = kmalloc(ptr->byte_cnt+2, GFP_KERNEL);
+		err = ds16_seeprom_read_nbyte(dev, ptr->address, verify_data, ptr->byte_cnt);
+		for (i = 0; i < ptr->byte_cnt; i++) {
+			if (ptr->content[i] != verify_data[i]) 
+			{
+				SOLOMON_WARNNING("miss match %04d W:0x%02x R:0x%02x!\n",i, ptr->content[i], verify_data[i]);
+				cnt++;
+			}
+		}	
+		kfree(verify_data);
+	 	if (cnt > 16)
+			goto chk_err;
+ 	}
+ 	
+  err = solomon_fw_make_link(&head, &tail, &SSL_MPFDM);
+  if (err < 0)
+  	return err;
+  ptr = &(tail->section);
+  SOLOMON_WARNNING("[CHK]section 8 add = 0x%x, len = %d\n",(int)(ptr->address),(ptr->byte_cnt));
+  if ((ptr->byte_cnt)!=0)
+  {
+		verify_data = kmalloc(ptr->byte_cnt+2, GFP_KERNEL);
+		err = ds16_seeprom_read_nbyte(dev, ptr->address, verify_data, ptr->byte_cnt);
+		for (i = 0; i < ptr->byte_cnt; i++) {
+			if (ptr->content[i] != verify_data[i]) 
+			{
+				SOLOMON_WARNNING("miss match %04d W:0x%02x R:0x%02x!\n",i, ptr->content[i], verify_data[i]);
+				cnt++;
+			}
+		}	
+		kfree(verify_data);
+		if (cnt > 16)
+			goto chk_err;    	
+  }
+
+  err = solomon_fw_make_link(&head, &tail, &SSL_FPM);
+  if (err < 0)
+  	return err;
+  ptr = &(tail->section);
+  SOLOMON_WARNNING("[CHK]section 9 add = 0x%x, len = %d\n",(int)(ptr->address),(ptr->byte_cnt));
+	if ((ptr->byte_cnt)!=0)
+	{	
+		verify_data = kmalloc(ptr->byte_cnt+2, GFP_KERNEL);
+		err = ds16_seeprom_read_nbyte(dev, ptr->address, verify_data, ptr->byte_cnt);
+		for (i = 0; i < ptr->byte_cnt; i++) {
+			if (ptr->content[i] != verify_data[i]) 
+			{
+				SOLOMON_WARNNING("miss match %04d W:0x%02x R:0x%02x!\n",i, ptr->content[i], verify_data[i]);
+				cnt++;
+			}
+		}	
+		kfree(verify_data);
+		if (cnt > 16)
+			goto chk_err;
+	}	
+	return 0;
+
+chk_err:	
+	return -1;
+	
+}      
 
 /* for furture, It is not used yet. */
 int solomon_firmware_check(struct solomon_device *dev, char *filename)

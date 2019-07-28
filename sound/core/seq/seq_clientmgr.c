@@ -1925,6 +1925,7 @@ static int snd_seq_ioctl_set_client_pool(struct snd_seq_client *client,
 	     info.output_pool != client->pool->size)) {
 		if (snd_seq_write_pool_allocated(client)) {
 			/* remove all existing cells */
+			snd_seq_pool_mark_closing(client->pool);
 			snd_seq_queue_client_leave_cells(client->number);
 			snd_seq_pool_done(client->pool);
 		}
@@ -1969,7 +1970,7 @@ static int snd_seq_ioctl_remove_events(struct snd_seq_client *client,
 		 * No restrictions so for a user client we can clear
 		 * the whole fifo
 		 */
-		if (client->type == USER_CLIENT)
+		if (client->type == USER_CLIENT && client->data.user.fifo)
 			snd_seq_fifo_clear(client->data.user.fifo);
 	}
 

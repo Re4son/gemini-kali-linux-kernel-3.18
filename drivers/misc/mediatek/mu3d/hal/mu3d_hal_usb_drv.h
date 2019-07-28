@@ -202,8 +202,5 @@ EXTERN void mu3d_hal_dft_reg(void);
 
 #undef EXTERN
 
-#ifdef SUPPORT_U3
-extern unsigned int musb_hal_speed;
-#endif
 
 #endif				/* USB_DRV_H */

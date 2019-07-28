@@ -789,7 +789,42 @@ void set_usb_current_unlimited(bool enable)
 
 void select_charging_curret_bcct(void)
 {
-	/* done on set_bat_charging_current_limit */
+	CHR_CURRENT_ENUM chr_type_ichg = 0;
+
+	switch (BMT_status.charger_type) {
+	case STANDARD_HOST:
+		chr_type_ichg = batt_cust_data.usb_charger_current;
+		break;
+	case NONSTANDARD_CHARGER:
+		chr_type_ichg = batt_cust_data.non_std_ac_charger_current;
+		break;
+	case STANDARD_CHARGER:
+		chr_type_ichg = batt_cust_data.ac_charger_current;
+#if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT)
+		if (is_ta_connect == KAL_TRUE && ta_vchr_tuning == KAL_TRUE)
+			chr_type_ichg = CHARGE_CURRENT_1500_00_MA;
+#endif
+		break;
+	case CHARGING_HOST:
+		chr_type_ichg = batt_cust_data.charging_host_charger_current;
+		break;
+	case APPLE_2_1A_CHARGER:
+		chr_type_ichg = batt_cust_data.apple_2_1a_charger_current;
+		break;
+	case APPLE_1_0A_CHARGER:
+		chr_type_ichg = batt_cust_data.apple_1_0a_charger_current;
+		break;
+	case APPLE_0_5A_CHARGER:
+		chr_type_ichg = batt_cust_data.apple_0_5a_charger_current;
+		break;
+	default:
+		chr_type_ichg = CHARGE_CURRENT_500_00_MA;
+		break;
+	}
+
+	if (g_temp_CC_value > chr_type_ichg)
+		g_temp_CC_value = chr_type_ichg;
+
 }
 
 
@@ -1096,7 +1131,7 @@ static void pchr_turn_on_charging(void)
 		battery_pump_express_algorithm_start();
 #endif
 
-		/* Set Charging Current
+		/* Set Charging Current */
 		if (get_usb_current_unlimited()) {
 			g_temp_CC_value = batt_cust_data.ac_charger_current;
 			battery_log(BAT_LOG_FULL,
@@ -1110,9 +1145,9 @@ static void pchr_turn_on_charging(void)
 				battery_log(BAT_LOG_FULL, "[BATTERY] select_charging_current !\n");
 				select_charging_curret();
 			}
-		}*/
+		}
 
-		/* Set Charging Current */
+		/* Set Charging Current
 		if (g_bcct_flag == 1) {
 			battery_log(BAT_LOG_FULL,
 					"[BATTERY] select_charging_curret_bcct !\n");
@@ -1126,16 +1161,13 @@ static void pchr_turn_on_charging(void)
 				battery_log(BAT_LOG_FULL, "[BATTERY] select_charging_current !\n");
 				select_charging_curret();
 			}
-		}
+		} */
 
 		if (g_temp_CC_value == CHARGE_CURRENT_0_00_MA) {
 			charging_enable = KAL_FALSE;
 			battery_log(BAT_LOG_CRTI,
 				    "[BATTERY] charging current is set 0mA, turn off charging !\r\n");
 		} else {
-#if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT)
-if (ta_check_ta_control == KAL_FALSE)
-#endif
 			{
 				if (ulc_cv_charging_current_flag == KAL_TRUE)
 					battery_charging_control(CHARGING_CMD_SET_CURRENT,

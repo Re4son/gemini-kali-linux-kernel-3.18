@@ -1,53 +1,45 @@
+/*
+ * Copyright (c) 2015-2017 MICROTRUST Incorporated
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #ifndef __UT_TUI_H_
 #define __UT_TUI_H_
 
-#include "utdriver_macro.h"
-
-struct message_head {
-        unsigned int invalid_flag;
-        unsigned int message_type;
-        unsigned int child_type;
-        unsigned int param_length;
+enum disp_pwm_id_t {
+	DISP_PWM0 = 0x1,
+	DISP_PWM1 = 0x2,
+	DISP_PWM_ALL = (DISP_PWM0 | DISP_PWM1)
 };
 
-struct fdrv_message_head {
-        unsigned int driver_type;
-        unsigned int fdrv_param_length;
-};
-
-struct create_fdrv_struct {
-        unsigned int fdrv_type;
-        unsigned int fdrv_phy_addr;
-        unsigned int fdrv_size;
-};
-
-struct ack_fast_call_struct {
-        int retVal;
-};
-
-extern unsigned long message_buff;
-extern unsigned long fdrv_message_buff;
-extern int fp_call_flag;
-extern int forward_call_flag;
-extern struct semaphore fdrv_lock;
-extern struct semaphore smc_lock;
+extern int mtkfb_set_backlight_level(unsigned int level);
+extern int disp_pwm_set_backlight(u32 disp_pwm_id_t, int level_1024);
+extern void disp_aal_notify_backlight_changed(int bl_1024);
 extern void ut_down_low(struct semaphore *sema);
-extern struct semaphore boot_sema;
-extern struct semaphore fdrv_sema;
-extern struct mutex pm_mutex;
-extern struct completion global_down_lock;
-extern struct semaphore api_lock;
-extern struct semaphore tui_notify_sema;
-extern unsigned long teei_config_flag;
 
-extern void invoke_fastcall(void);
-extern void ut_pm_mutex_lock(struct mutex *lock);
-extern void ut_pm_mutex_unlock(struct mutex *lock);
+extern int enter_tui_flag;
+extern int power_down_flag;
+extern struct mutex pm_mutex;
+extern unsigned long tui_display_message_buff;
+extern unsigned long tui_notice_message_buff;
+extern struct semaphore tui_notify_sema;
 
 int try_send_tui_command(void);
 int send_tui_display_command(unsigned long share_memory_size);
 int send_tui_notice_command(unsigned long share_memory_size);
+unsigned long create_tui_buff(int buff_size, unsigned int fdrv_type);
+int wait_for_power_down(void *data);
+int tui_notify_reboot(struct notifier_block *this, unsigned long code, void *x);
+int __send_tui_display_command(unsigned long share_memory_size);
+int __send_tui_notice_command(unsigned long share_memory_size);
 
-
-
-#endif
+#endif /* end of __UT_TUI_H_ */

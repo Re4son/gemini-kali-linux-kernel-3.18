@@ -18,7 +18,7 @@
 #include <linux/cpumask.h>
 #include <linux/cpu.h>
 #include <linux/delay.h>
-#include <asm/bug.h>
+#include <linux/bug.h>
 #include <mt-plat/mt_io.h>
 #include <mt-plat/sync_write.h>
 #include "mt_dcm.h"
@@ -199,13 +199,13 @@ typedef void (*DCM_PRESET_FUNC)(void);
 #define ARMPLL_DCM_WFE_ENABLE_3_OFF		(0x0<<14)
 
 
-typedef enum {
+enum ENUM_ARMCORE_DCM {
 	ARMCORE_DCM_OFF = DCM_OFF,
 	ARMCORE_DCM_MODE1 = DCM_ON,
 	ARMCORE_DCM_MODE2 = DCM_ON+1,
-} ENUM_ARMCORE_DCM;
+};
 
-int dcm_armcore(ENUM_ARMCORE_DCM mode)
+int dcm_armcore(enum ENUM_ARMCORE_DCM mode)
 {
 	dcm_info("%s(%d)\n", __func__, mode);
 
@@ -357,12 +357,12 @@ int dcm_armcore(ENUM_ARMCORE_DCM mode)
 #define INFRA_MISC_2_EN		(0x0<<22 | 0x0<<30)
 #define INFRA_MISC_2_DIS	(0x7F<<22 | 0x3<<30)
 
-typedef enum {
+enum ENUM_INFRA_DCM {
 	INFRA_DCM_OFF = DCM_OFF,
 	INFRA_DCM_ON = DCM_ON,
-} ENUM_INFRA_DCM;
+};
 
-int dcm_infra(ENUM_INFRA_DCM on)
+int dcm_infra(enum ENUM_INFRA_DCM on)
 {
 	dcm_info("%s(%d)\n", __func__, on);
 
@@ -470,12 +470,12 @@ void dcm_infra_preset(void)
 #define PERI_DCM_SEL_EN		((0x10<<5) | (0x01<<10))
 #define PERI_DCM_DB_MASK	(0x1F<<15)
 
-typedef enum {
+enum ENUM_PERI_DCM {
 	PERI_DCM_OFF = DCM_OFF,
 	PERI_DCM_ON = DCM_ON,
-} ENUM_PERI_DCM;
+};
 
-int dcm_peri(ENUM_PERI_DCM on)
+int dcm_peri(enum ENUM_PERI_DCM on)
 {
 	dcm_info("%s(%d)\n", __func__, on);
 
@@ -588,10 +588,10 @@ void dcm_peri_preset(void)
 #define DFS_MEM_BUS_RATE_SHFT	0
 #define DRAMC_PIPE_SLOWDOWN_EN	(0x1 << 9)
 
-typedef enum {
+enum ENUM_MEM_DCM {
 	MEM_DCM_OFF = DCM_OFF,
 	MEM_DCM_ON = DCM_ON,
-} ENUM_MEM_DCM;
+} ;
 
 void dcm_mem_toggle(void)
 {
@@ -655,7 +655,7 @@ void dcm_mem_preset(void)
 					 MEM_DCM_FSEL_EN));
 }
 
-int dcm_mem(ENUM_MEM_DCM on)
+int dcm_mem(enum ENUM_MEM_DCM on)
 {
 	if (on == MEM_DCM_ON) {
 
@@ -720,7 +720,7 @@ int dcm_mem_dbc(int cnt)
 #define MISC_AUDIO_DCM_EN	(1<<29)
 #define MISC_SSUSB_DCM_EN	(1<<31)
 
-typedef enum {
+enum ENUM_MISC_DCM {
 	MISC_DCM_OFF = DCM_OFF,
 	PMIC_DCM_OFF = DCM_OFF,
 	USB_DCM_OFF = DCM_OFF,
@@ -734,7 +734,7 @@ typedef enum {
 	ICUSB_DCM_ON = DCM_ON,
 	AUDIO_DCM_ON = DCM_ON,
 	SSUSB_DCM_ON = DCM_ON,
-} ENUM_MISC_DCM;
+};
 
 /** argu REG, is 1-bit hot value **/
 int _dcm_peri_misc(unsigned int reg, int on)
@@ -745,7 +745,7 @@ int _dcm_peri_misc(unsigned int reg, int on)
 	return 0;
 }
 
-int dcm_pmic(ENUM_MISC_DCM on)
+int dcm_pmic(enum ENUM_MISC_DCM on)
 {
 	if (on == PMIC_DCM_ON)
 		reg_write(PERI_BUS_DCM_CTRL, aor(reg_read(PERI_BUS_DCM_CTRL),
@@ -759,28 +759,28 @@ int dcm_pmic(ENUM_MISC_DCM on)
 	return 0;
 }
 
-int dcm_usb(ENUM_MISC_DCM on)
+int dcm_usb(enum ENUM_MISC_DCM on)
 {
 	_dcm_peri_misc(MISC_USB_DCM_EN, on);
 
 	return 0;
 }
 
-int dcm_icusb(ENUM_MISC_DCM on)
+int dcm_icusb(enum ENUM_MISC_DCM on)
 {
 	_dcm_peri_misc(MISC_ICUSB_DCM_EN, on);
 
 	return 0;
 }
 
-int dcm_audio(ENUM_MISC_DCM on)
+int dcm_audio(enum ENUM_MISC_DCM on)
 {
 	_dcm_peri_misc(MISC_AUDIO_DCM_EN, on);
 
 	return 0;
 }
 
-int dcm_ssusb(ENUM_MISC_DCM on)
+int dcm_ssusb(enum ENUM_MISC_DCM on)
 {
 	_dcm_peri_misc(MISC_SSUSB_DCM_EN, on);
 
@@ -931,7 +931,7 @@ int dcm_ssusb(ENUM_MISC_DCM on)
 #define MSCI_A_DCM_ON	(0xFFFF << 16)
 #define MSCI_A_DCM_OFF	(0x0    << 16)
 
-int dcm_mcusys_stall_dcm(ENUM_MCUSYS_DCM on)
+int dcm_mcusys_stall_dcm(enum ENUM_MCUSYS_DCM on)
 {
 	if (on == MCUSYS_DCM_ON) {
 		MCUSYS_SMC_WRITE(MCUCFG_SYNC_DCM_CLUSTER_CONFIG,
@@ -947,7 +947,7 @@ int dcm_mcusys_stall_dcm(ENUM_MCUSYS_DCM on)
 	return 0;
 }
 
-int dcm_mcusys_sync_dcm(ENUM_MCUSYS_DCM on)
+int dcm_mcusys_sync_dcm(enum ENUM_MCUSYS_DCM on)
 {
 	dcm_info("%s(%d)\n", __func__, on);
 
@@ -984,7 +984,7 @@ int dcm_mcusys_sync_dcm(ENUM_MCUSYS_DCM on)
 	return 0;
 }
 
-int dcm_mcusys_mp2_sync_dcm(ENUM_MCUSYS_DCM on)
+int dcm_mcusys_mp2_sync_dcm(enum ENUM_MCUSYS_DCM on)
 {
 //	dcm_info("%s(%d)\n", __func__, on);
 
@@ -1028,7 +1028,7 @@ int dcm_mcusys_mp2_sync_dcm(ENUM_MCUSYS_DCM on)
 	return 0;
 }
 
-int dcm_mcusys_little(ENUM_MCUSYS_DCM on)
+int dcm_mcusys_little(enum ENUM_MCUSYS_DCM on)
 {
 	dcm_info("%s(%d)\n", __func__, on);
 
@@ -1084,7 +1084,7 @@ int dcm_mcusys_little(ENUM_MCUSYS_DCM on)
 	return 0;
 }
 
-int dcm_mcusys(ENUM_MCUSYS_DCM on)
+int dcm_mcusys(enum ENUM_MCUSYS_DCM on)
 {
 	dcm_info("%s(%d)\n", __func__, on);
 
@@ -1129,12 +1129,12 @@ int dcm_mcusys(ENUM_MCUSYS_DCM on)
 #define DRAMC_PERFCTL0_EN	(0<<16)
 #define DRAMC_PERFCTL0_DIS	(1<<16)
 
-typedef enum {
+enum ENUM_DRAMC_AO_DCM {
 	DRAMC_AO_DCM_OFF = DCM_OFF,
 	DRAMC_AO_DCM_ON = DCM_ON,
-} ENUM_DRAMC_AO_DCM;
+};
 
-int dcm_dramc_ao(ENUM_DRAMC_AO_DCM on)
+int dcm_dramc_ao(enum ENUM_DRAMC_AO_DCM on)
 {
 	dcm_info("%s(%d)\n", __func__, on);
 
@@ -1192,12 +1192,12 @@ int dcm_dramc_ao(ENUM_DRAMC_AO_DCM on)
 #define DDRPHY_CTRL_EN		((1<<31) | (1<<30) | (0<<26) | (0<<3))
 #define DDRPHY_CTRL_DIS		((0<<31) | (0<<30) | (1<<26) | (1<<3))
 
-typedef enum {
+enum ENUM_DDRPHY_DCM {
 	DDRPHY_DCM_OFF = DCM_OFF,
 	DDRPHY_DCM_ON = DCM_ON,
-} ENUM_DDRPHY_DCM;
+};
 
-int dcm_ddrphy(ENUM_DDRPHY_DCM on)
+int dcm_ddrphy(enum ENUM_DDRPHY_DCM on)
 {
 	dcm_info("%s(%d)\n", __func__, on);
 
@@ -1232,12 +1232,12 @@ int dcm_ddrphy(ENUM_DDRPHY_DCM on)
 #define EMI_CONM_EN		(0x0<<24)
 #define EMI_CONM_DIS	(0xFF<<24)
 
-typedef enum {
+enum ENUM_EMI_DCM {
 	EMI_DCM_OFF = DCM_OFF,
 	EMI_DCM_ON = DCM_ON,
-} ENUM_EMI_DCM;
+};
 
-int dcm_emi(ENUM_EMI_DCM on)
+int dcm_emi(enum ENUM_EMI_DCM on)
 {
 	dcm_info("%s(%d)\n", __func__, on);
 
@@ -1301,7 +1301,7 @@ enum {
 #define INIT_DCM_TYPE  (ARMCORE_DCM_TYPE)
 #endif
 
-typedef struct _dcm {
+struct _dcm {
 	int current_state;
 	int saved_state;
 	int disable_refcnt;
@@ -1310,9 +1310,9 @@ typedef struct _dcm {
 	DCM_PRESET_FUNC preset_func;
 	int typeid;
 	char *name;
-} DCM;
+};
 
-static DCM dcm_array[NR_DCM_TYPE] = {
+static struct _dcm dcm_array[NR_DCM_TYPE] = {
 	{
 	 .typeid = ARMCORE_DCM_TYPE,
 	 .name = "ARMCORE_DCM",
@@ -1438,7 +1438,7 @@ static DCM dcm_array[NR_DCM_TYPE] = {
 void dcm_set_default(unsigned int type)
 {
 	int i;
-	DCM *dcm;
+	struct _dcm *dcm;
 
 	dcm_info("[%s]type:0x%08x\n", __func__, type);
 
@@ -1465,7 +1465,7 @@ void dcm_set_default(unsigned int type)
 void dcm_set_state(unsigned int type, int state)
 {
 	int i;
-	DCM *dcm;
+	struct _dcm *dcm;
 
 	dcm_info("[%s]type:0x%08x, set:%d\n", __func__, type, state);
 
@@ -1494,7 +1494,7 @@ void dcm_set_state(unsigned int type, int state)
 void dcm_disable(unsigned int type)
 {
 	int i;
-	DCM *dcm;
+	struct _dcm *dcm;
 
 	dcm_info("[%s]type:0x%08x\n", __func__, type);
 
@@ -1521,7 +1521,7 @@ void dcm_disable(unsigned int type)
 void dcm_restore(unsigned int type)
 {
 	int i;
-	DCM *dcm;
+	struct _dcm *dcm;
 
 	dcm_info("[%s]type:0x%08x\n", __func__, type);
 
@@ -1551,7 +1551,7 @@ void dcm_restore(unsigned int type)
 void dcm_dump_state(int type)
 {
 	int i;
-	DCM *dcm;
+	struct _dcm *dcm;
 
 	dcm_info("\n******** dcm dump state *********\n");
 	for (i = 0, dcm = &dcm_array[0]; i < NR_DCM_TYPE; i++, dcm++) {
@@ -1612,7 +1612,7 @@ static ssize_t dcm_state_show(struct kobject *kobj, struct kobj_attribute *attr,
 	int len = 0;
 	char *p = buf;
 	int i;
-	DCM *dcm;
+	struct _dcm *dcm;
 
 	/* dcm_dump_state(ALL_DCM_TYPE); */
 	p += sprintf(p, "\n******** dcm dump state *********\n");

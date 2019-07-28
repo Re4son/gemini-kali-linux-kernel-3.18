@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2015-2017 MICROTRUST Incorporated
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
+#ifndef __VFS_TEEI_H_
+#define __VFS_TEEI_H_
 
 #define RPMB_IOCTL_SOTER_WRITE_DATA	5
 #define RPMB_IOCTL_SOTER_READ_DATA	6
@@ -59,7 +75,7 @@ struct TEEI_vfs_command {
 
 		struct func_closedir {
 			unsigned long p_dir;
-		}func_closedir_args;
+		} func_closedir_args;
 
 	} args;
 
@@ -67,8 +83,9 @@ struct TEEI_vfs_command {
 
 union TEEI_vfs_response {
 	int value;
-        unsigned long p_dir;
+	unsigned long p_dir;
 };
 
-extern char *daulOS_VFS_share_mem;
 extern char *daulOS_VFS_write_share_mem;
+
+#endif /* end of __VFS_TEEI_H_*/

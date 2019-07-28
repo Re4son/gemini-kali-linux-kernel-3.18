@@ -10,7 +10,7 @@
 
 #include <linux/semaphore.h>
 
-#define DRIVER_VRESION "1.10"
+#define DRIVER_VRESION "1.13"
 #define GTP_GPIO_AS_INT(pin) tpd_gpio_as_int(pin)
 #define GTP_GPIO_OUTPUT(pin, level) tpd_gpio_output(pin, level)
 
@@ -23,13 +23,13 @@
 extern struct tpd_device *tpd;
 
 //--MTK I2C DMA info.---
-//#define I2C_DMA_SUPPORT 1
+#define I2C_DMA_SUPPORT 0
 #define DMA_MAX_TRANSACTION_LENGTH        255   // for DMA mode
 #define DMA_MAX_I2C_TRANSFER_SIZE        (DMA_MAX_TRANSACTION_LENGTH - 1)
 
-//#define SUPPORT_MT_PROTOCOL_B   //Del by ZGY
+#define SUPPORT_MT_PROTOCOL_B
 
-//#define SUPPORT_MTK_ESD_RECOVERY
+#define SUPPORT_MTK_ESD_RECOVERY
 
 //#define SUPPORT_TOUCH_RESET_PIN_CTL
 
@@ -56,6 +56,8 @@ extern struct tpd_device *tpd;
 #define SUPPORT_KEY_BUTTON		/* for key H/W button */
 
 //#define SUPPORT_GESTURE_DEMO	/* for gesture demo. relative MainTAG */
+//#define SUPPORT_SELF_TEST	/* for firmware self test support */
+#define SELF_TEST_PATH				("/sdcard/str/st_results.csv")
 
 #define TMC_UNSTALL_DELAY	5
 #define TMC_READ_DELAY		200		/* I2C packet delay */
@@ -80,6 +82,8 @@ extern struct tpd_device *tpd;
 
 #define MAX_RAWDATA_BUFFER_SIZE	512
 #define MAX_DEVICE_KEYMAP_SIZE	16
+#define AFE_MAX_LIMIT 2700
+#define AFE_MIN_LIMIT 50
 
 #define HIDDEN_VERSION_FACTORY		0x7F0000F7	/* for force update */
 
@@ -186,6 +190,7 @@ extern struct tpd_device *tpd;
 #define DS_CUP_CONTROL				0x0002
 #define DS_CLEAR_INT				0x0001
 #define DS_ERASE_MACRO				0x000B
+#define DS_BOOTUP_MULTIFW			0x000E
 
 #define DS_EFLASH_READ_01			0x0009
 #define DS_EFLASH_WRITE_01			0x0008
@@ -202,8 +207,8 @@ extern struct tpd_device *tpd;
  *-----------------------------------------------------
  */
 #define solomon_debug		0
-#define solomon_warnning	1
-#define solomon_timecheck	0	/* only use check the boot time */
+#define solomon_warnning	0
+#define solomon_timecheck	3//0	/* only use check the boot time */
 
 #if solomon_debug
 #define SOLOMON_DEBUG(fmt, args...)	\
@@ -225,7 +230,7 @@ extern struct tpd_device *tpd;
 
 #if  solomon_timecheck
 #define SOLOMON_TIME(fmt, args...) \
-	dev_info(""fmt"\n",	\
+	pr_info(""fmt"\n",	\
 ##args)
 #else
 #define SOLOMON_TIME(fmt, args...) \
@@ -236,7 +241,7 @@ extern struct tpd_device *tpd;
  *-----------------------------------------------------
  */
 /* Support ESD Timer when value is 1. */
-#define ESD_TIMER_ENABLE	 0	//1
+#define ESD_TIMER_ENABLE		1
 
 #define	SOLOMON_ESD_INTERVAL		1
 #define SOLOMON_SCAN_RATE_HZ		60
@@ -247,6 +252,7 @@ extern struct tpd_device *tpd;
  *	CMD & Reg Addr
  *-----------------------------------------------------
  */
+#define SOLOMON_GOTO_BIOS			0x0020
 #define SOLOMON_POWER_MODE			0x002F
 
 #define SOLOMON_SWRESET_CMD			0x0044
@@ -257,6 +263,7 @@ extern struct tpd_device *tpd;
 #define SOLOMON_HW_CALIBRATION		0x0046
 
 #define SOLOMON_MP_TEST				0x004A
+#define SOLOMON_SELF_TEST			0x004E
 
 #define SOLOMON_TOUCH_MODE			0x0050
 
@@ -276,6 +283,8 @@ extern struct tpd_device *tpd;
 #define SOLOMON_TMC_I2C_LENGTH		0x005A
 #endif
 #define SOLOMON_HW_CAL_INFO		(SOLOMON_TOUCH_MODE+0x12B)
+#define SOLOMON_AFE_MAX_LIMIT		0x0102
+#define SOLOMON_AFE_MIN_LIMIT		0x0103
 #define SOLOMON_ESD_TIME		0x016E
 
 #define SOLOMON_STATUS_LENGTH		0x0AF0
@@ -303,7 +312,7 @@ extern struct tpd_device *tpd;
  */
 #define AUX_ESD_DETECT			0x00AA
 #define AUX_CS_ERROR			0x00F0
-#ifdef SUPPORT_ES2
+#if defined SUPPORT_ES2 || defined SUPPORT_SSD2025
 #define AUX_BOOTUP_RESET		0x0001
 #define AUX_WDTDS_INT			0x0002
 #endif
@@ -311,6 +320,7 @@ extern struct tpd_device *tpd;
 #define AUX_NEED_C2_DIC_RESET		0x00C2
 #define AUX_NEED_C3_DIC_POWER		0x00C3
 #define AUX_NEED_C4_DSV_POWER_RESET	0x00C4
+#define AUX_D0_SELF_TEST		0x00D0
 
 /*-----------------------------------------------------
  *	POWER mode
@@ -404,6 +414,8 @@ extern struct tpd_device *tpd;
 #define TOUCH_IOCTL_HW_RESET			_IO(TOUCH_IOCTL_BASE, 17)
 
 int solomon_reset(void);
+int solomon_goto_bios(void);
+int solomon_bootup_multifw(void);
 int ts_read_data(struct i2c_client *client, u16 reg, u8 *values, u16 length);
 int ts_read_data_ex(struct i2c_client *client, u8 *reg, u16 regLen,
 		u8 *values, u16 length);
@@ -490,7 +502,7 @@ int solomon_resume_ex(void);
 #define SSL_KEYDATA_HOMEPAGE_UP		0x0800
 #endif	/* SUPPORT_KEY_BUTTON */
 
-#ifdef SUPPORT_ES2
+#if defined SUPPORT_ES2 && !defined SUPPORT_SSD2025
 #define DS_VERSION_ES1		1
 #define DS_VERSION_ES2		2
 #endif
@@ -616,7 +628,7 @@ struct solomon_device {
 	struct solomon_version fw_version;
 	u16		boot_flag;
 	u16		checksum_flag;
-#ifdef SUPPORT_ES2
+#if defined SUPPORT_ES2 && !defined SUPPORT_SSD2025
 	u16		es_version;
 #endif
 #ifdef SUPPORT_ESD_CHECKSUM
@@ -656,6 +668,10 @@ int solomon_firmware_pre_boot_up_check_bin(struct solomon_device *dev,
 int solomon_firmware_pre_boot_up_check_head(struct solomon_device *dev);
 int solomon_firmware_pre_boot_up_check(struct solomon_device *dev);
 int solomon_get_version_boot(struct solomon_device *dev);
+int solomon_firmware_fw_check(struct solomon_device *dev);
+
+#ifndef SUPPORT_SSD2025
 u8 *solomon_get_version(struct solomon_device *dev, u8 *ver_buff);
+#endif
 int solomon_free_header(struct solomon_device *dev);
 #endif

@@ -46,9 +46,12 @@
 #ifdef CONFIG_MTK_EIC_HISTORY_DUMP
 #include <linux/irqchip/mt-eic.h>
 #endif
+#include <mrdump_private.h>
+#include "mtk_hps_external.h"
 
 #define THREAD_INFO(sp) ((struct thread_info *) \
 				((unsigned long)(sp) & ~(THREAD_SIZE - 1)))
+
 
 #define WDT_PERCPU_LOG_SIZE	2048
 #define WDT_LOG_DEFAULT_SIZE	4096
@@ -333,7 +336,9 @@ static void aee_wdt_dump_backtrace(unsigned int cpu, struct pt_regs *regs)
 #ifdef CONFIG_ARM64
 			/* work around for unknown reason do_mem_abort stack abnormal */
 			excp_regs = (void *)(cur_frame.fp + 0x10 + 0xa0);
-			unwind_frame(&cur_frame);	/* skip do_mem_abort & el1_da */
+			if (unwind_frame(&cur_frame) < 0) {	/* skip do_mem_abort & el1_da */
+				aee_wdt_percpu_printf(cpu, "in_exception_text unwind_frame < 0\n");
+			}
 #else
 			excp_regs = (void *)(cur_frame.fp + 4);
 #endif
@@ -498,6 +503,8 @@ void aee_wdt_atf_info(unsigned int cpu, struct pt_regs *regs)
 	/* avoid lock prove to dump_stack in __debug_locks_off() */
 	xchg(&debug_locks, 0);
 	aee_rr_rec_fiq_step(AEE_FIQ_STEP_WDT_IRQ_DONE);
+	/* Dump hot plug kernel backtrace */
+	hps_dump_task_info();
 	BUG();
 }
 
@@ -511,6 +518,8 @@ void notrace aee_wdt_atf_entry(void)
 	int cpu = get_HW_cpuid();
 
 	aee_rr_rec_exp_type(1);
+
+	__disable_dcache__inner_flush_dcache_L1__inner_flush_dcache_L2();
 
 	if (atf_aee_debug_virt_addr) {
 		regs = (void *)(atf_aee_debug_virt_addr + (cpu * sizeof(struct atf_aee_regs)));

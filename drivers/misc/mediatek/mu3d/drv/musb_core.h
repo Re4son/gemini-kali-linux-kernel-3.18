@@ -59,7 +59,7 @@ struct musb_ep;
 #ifdef CONFIG_MTK_KERNEL_POWER_OFF_CHARGING
 #include <mt-plat/mt_boot_common.h>
 #endif
-extern u32 fake_CDP;
+extern int fake_CDP;
 extern unsigned int musb_speed;
 
 extern struct musb *_mu3d_musb;
@@ -88,11 +88,12 @@ extern CHARGER_TYPE mt_get_charger_type(void);
 
 /* #define U3_COMPLIANCE */
 
-#ifdef SUPPORT_U3
-#define USB_GADGET_SUPERSPEED
-#else
+#if defined(CONFIG_USB_MU3D_ONLY_U2_MODE)
 #define USB_GADGET_DUALSPEED
+#else
+#define USB_GADGET_SUPERSPEED
 #endif
+
 #define EP_PROFILING
 
 #define MUSB_DRIVER_NAME "musb-hdrc"
@@ -837,4 +838,5 @@ extern int typec_switch_usb_connect(void *data);
 #endif
 extern int mu3d_force_on;
 extern void mt_usb_connect(void);
+extern void mt_usb_connect_test(int start);
 #endif	/* __MUSB_CORE_H__ */

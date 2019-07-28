@@ -5,6 +5,9 @@ ifeq ($(CONFIG_TRUSTONIC_TEE_SUPPORT),y)
 			# use default version
 			ccflags-y += -I$(srctree)/drivers/misc/mediatek/gud/302a/gud/MobiCoreKernelApi/include \
 						 -I$(srctree)/drivers/misc/mediatek/gud/302a/gud/MobiCoreKernelApi/public
+		else ifeq ($(CONFIG_TRUSTONIC_TEE_VERSION), "311c")
+			ccflags-y += -I$(srctree)/drivers/misc/mediatek/gud/$(CONFIG_TRUSTONIC_TEE_VERSION)/MobiCoreDriver/include \
+						 -I$(srctree)/drivers/misc/mediatek/gud/$(CONFIG_TRUSTONIC_TEE_VERSION)/MobiCoreDriver/public
 		else
 			ccflags-y += -I$(srctree)/drivers/misc/mediatek/gud/$(CONFIG_TRUSTONIC_TEE_VERSION)/gud/MobiCoreKernelApi/include \
 						 -I$(srctree)/drivers/misc/mediatek/gud/$(CONFIG_TRUSTONIC_TEE_VERSION)/gud/MobiCoreKernelApi/public

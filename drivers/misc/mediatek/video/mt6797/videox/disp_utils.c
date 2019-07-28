@@ -60,7 +60,12 @@ unsigned int disp_allocate_mva(unsigned int pa, unsigned int size, M4U_PORT_ID p
 	unsigned int mva = 0;
 	m4u_client_t *client = NULL;
 	struct sg_table *sg_table = kzalloc(sizeof(struct sg_table), GFP_ATOMIC);
-	sg_alloc_table(sg_table, 1, GFP_KERNEL);
+
+	ret = sg_alloc_table(sg_table, 1, GFP_KERNEL);
+	if (ret) {
+		DISPMSG("%s: sg_alloc_table failed\n", __func__);
+		return -ENOMEM;
+	}
 
 	sg_dma_address(sg_table->sgl) = pa;
 	sg_dma_len(sg_table->sgl) = size;

@@ -568,10 +568,10 @@ static int disp_is_intr_enable(DISP_REG_ENUM module)
 	case DISP_REG_DSI0:
 	case DISP_REG_DPI0:
 	case DISP_REG_AAL:
+	case DISP_REG_CCORR:
 		return 1;
 
 	case DISP_REG_COLOR:
-	case DISP_REG_CCORR:
 	case DISP_REG_GAMMA:
 	case DISP_REG_DITHER:
 	case DISP_REG_PWM:
@@ -737,6 +737,7 @@ static int __init disp_probe_1(void)
 	if (!dispsys_dev) {
 		DDPERR("%s: dispsys_dev=NULL\n", __func__);
 		WARN(1, "dispsys_dev=NULL\n");
+		return -EINVAL;
 	}
 
 	dispsys_dev->dev = &pdev->dev;

@@ -48,7 +48,8 @@ enum {
 	FG_SUSPEND = 2,
 	FG_RESUME = 4,
 	FG_CHARGER = 8,
-	FG_INIT = 16
+	FG_INIT = 16,
+	FG_ZCV_INT = 32
 };
 
 enum {
@@ -154,6 +155,12 @@ struct battery_meter_custom_data {
 
 struct battery_meter_custom_data {
 
+	int versionID1;
+	int versionID2;
+
+	int last_low_battery_temp;
+
+
 	/* cust_battery_meter.h */
 	int soc_flow;
 
@@ -239,9 +246,9 @@ struct battery_meter_custom_data {
 	int shutdown_gauge1_xmins;
 	int shutdown_gauge1_mins;
 
-	int tracking_gap;
-	int trackingoffset;
-	int trackingen;
+	int trk_point_en;
+	int trk_point_thr;
+
 
 	int min_charging_smooth_time;
 
@@ -251,6 +258,8 @@ struct battery_meter_custom_data {
 	int apsleep_battery_voltage_compensate;
 
 	int bat_task_period;
+
+	int zcv_int_enable;
 
 };
 
@@ -325,6 +334,7 @@ typedef enum {
 	FG_DAEMON_CMD_SET_HWSOC,
 	FG_DAEMON_CMD_SET_VBATSOC,
 	FG_DAEMON_CMD_SET_CAR_TUNE_VALUE,
+	FG_DAEMON_CMD_GET_ZCV_INT_HW_OCV,
 
 	FG_DAEMON_CMD_FROM_USER_NUMBER
 } FG_DAEMON_CTRL_CMD_FROM_USER;
@@ -386,6 +396,7 @@ extern signed int battery_meter_get_battery_nPercent_UI_SOC(void);	/* tracking p
 
 extern signed int battery_meter_get_tempR(signed int dwVolt);
 extern signed int battery_meter_get_tempV(void);
+extern signed int battery_meter_get_QMAX25(void);
 extern signed int battery_meter_get_VSense(void);/* isense voltage */
 extern void battery_meter_smooth_uisoc2(void);
 extern int wakeup_fg_algo(int flow_state);
@@ -416,7 +427,18 @@ extern signed int battery_meter_meta_tool_cali_car_tune(int);
 extern void mt_battery_set_init_vol(int);
 
 #if defined(CONFIG_MTK_HAFG_20)
-unsigned int get_cv_voltage(void);
+extern struct battery_meter_custom_data batt_meter_cust_data;
+extern struct battery_meter_table_custom_data batt_meter_table_cust_data;
+extern unsigned int get_cv_voltage(void);
+extern void battery_meter_recovery_run(int flow_state);
+extern void battery_meter_get_init_value(signed int *voltage, bool *is_charging, signed int *bat_current);
+extern void battery_meter_set_r_bat(int r_bat);
+extern void battery_meter_set_sw_ocv(int voltage);
+extern int battery_meter_get_hw_ocv(void);
+extern bool is_recovery_mode(void);
+extern void bmr_init(void);
+extern void bmr_run(int flow_state);
+extern void battery_meter_set_fg_int(void);
 #endif
 
 #endif /* #ifndef _BATTERY_METER_H */

@@ -451,9 +451,11 @@ static int _get_current_gpu_power(void)
 	unsigned int cur_gpu_power = 0;
 	int i = 0;
 
-	for (; i < Num_of_GPU_OPP; i++)
-		if (mtk_gpu_power[i].gpufreq_khz == cur_gpu_freq)
-			cur_gpu_power = mtk_gpu_power[i].gpufreq_power;
+	if (mtk_gpu_power != NULL) {
+		for (; i < Num_of_GPU_OPP; i++)
+			if (mtk_gpu_power[i].gpufreq_khz == cur_gpu_freq)
+				cur_gpu_power = mtk_gpu_power[i].gpufreq_power;
+	}
 
 	return (int) cur_gpu_power;
 }
@@ -550,25 +552,27 @@ static int P_adaptive(int total_power, unsigned int gpu_loading)
 		cpu_power = MAXIMUM_CPU_POWER;
 		gpu_power = MAXIMUM_GPU_POWER;
 	} else {
-		int max_allowed_gpu_power =
-		    MIN((total_power - MINIMUM_CPU_POWER), MAXIMUM_GPU_POWER);
-		int max_gpu_power = (int) mt_gpufreq_get_max_power();
-		int highest_possible_gpu_power = (max_allowed_gpu_power > max_gpu_power) ?  (max_gpu_power+1) : -1;
-		/* int highest_possible_gpu_power_idx = 0; */
-		int i = 0;
+		if (mtk_gpu_power != NULL) {
+			int max_allowed_gpu_power =
+			MIN((total_power - MINIMUM_CPU_POWER), MAXIMUM_GPU_POWER);
+			int max_gpu_power = (int) mt_gpufreq_get_max_power();
+			int highest_possible_gpu_power = (max_allowed_gpu_power > max_gpu_power) ?
+			(max_gpu_power+1) : -1;
+			/* int highest_possible_gpu_power_idx = 0; */
+			int i = 0;
 
-		unsigned int cur_gpu_freq = mt_gpufreq_get_cur_freq();
-		/* int cur_idx = 0; */
-		unsigned int cur_gpu_power = 0;
-		unsigned int next_lower_gpu_power = 0;
+			unsigned int cur_gpu_freq = mt_gpufreq_get_cur_freq();
+			/* int cur_idx = 0; */
+			unsigned int cur_gpu_power = 0;
+			unsigned int next_lower_gpu_power = 0;
 
-		/* get GPU highest possible power and index and current power and index and next lower power */
-		for (; i < Num_of_GPU_OPP; i++) {
-			if ((mtk_gpu_power[i].gpufreq_power <= max_allowed_gpu_power) &&
+			/* get GPU highest possible power and index and current power and index and next lower power */
+			for (; i < Num_of_GPU_OPP; i++) {
+				if ((mtk_gpu_power[i].gpufreq_power <= max_allowed_gpu_power) &&
 				(-1 == highest_possible_gpu_power)) {
-				/* choose OPP with power "<=" limit */
-				highest_possible_gpu_power = mtk_gpu_power[i].gpufreq_power + 1;
-				/* highest_possible_gpu_power_idx = i; */
+					/* choose OPP with power "<=" limit */
+					highest_possible_gpu_power = mtk_gpu_power[i].gpufreq_power + 1;
+					/* highest_possible_gpu_power_idx = i; */
 			}
 
 			if (mtk_gpu_power[i].gpufreq_khz == cur_gpu_freq) {
@@ -594,6 +598,9 @@ static int P_adaptive(int total_power, unsigned int gpu_loading)
 			gpu_power = MIN(highest_possible_gpu_power, cur_gpu_power);
 			gpu_power = MAX(gpu_power, MINIMUM_GPU_POWER);
 		}
+		}  else {
+			gpu_power = 0;
+		}
 
 		cpu_power = MIN((total_power - gpu_power), MAXIMUM_CPU_POWER);
 	}
@@ -611,7 +618,7 @@ static int P_adaptive(int total_power, unsigned int gpu_loading)
 	if (cpu_power != last_cpu_power)
 		set_adaptive_cpu_power_limit(cpu_power);
 
-	if (gpu_power != last_gpu_power) {
+	if ((gpu_power != last_gpu_power) && (mtk_gpu_power != NULL)) {
 		/* Work-around for unsync GPU power table problem 1. */
 		if (gpu_power > mtk_gpu_power[0].gpufreq_power)
 			set_adaptive_gpu_power_limit(0);
@@ -1622,23 +1629,23 @@ static int tscpu_read_phpb(struct seq_file *m, void *v)
 static ssize_t tscpu_write_phpb(struct file *file, const char __user *buffer,
 		size_t count, loff_t *data)
 {
-	char *buf, *ori_buf;
+	char desc[128];
+	char *buf = NULL;
+	int len = 0;
 	int i, tt, tp;
 	int __theta;
 	int ret = -EINVAL;
 	struct phpb_param *p;
 
-	buf = kmalloc(count + 1, GFP_KERNEL);
-	if (buf == NULL)
-		return -EFAULT;
-	ori_buf = buf;
+	len = (count < (sizeof(desc) - 1)) ? count : (sizeof(desc) - 1);
 
-	if (copy_from_user(buf, buffer, count)) {
+	if (copy_from_user(desc, buffer, len)) {
 		ret = -EFAULT;
 		goto exit;
 	}
 
-	buf[count] = '\0';
+	desc[len] = '\0';
+	buf = desc;
 
 	for (i = 0; i < NR_PHPB_PARAMS; i++) {
 		p = &phpb_params[i];
@@ -1664,10 +1671,9 @@ static ssize_t tscpu_write_phpb(struct file *file, const char __user *buffer,
 			goto exit;
 		phpb_theta_max = __theta;
 	}
-	ret = count;
+	ret = len;
 
 exit:
-	kfree(ori_buf);
 	return ret;
 }
 
@@ -1680,7 +1686,8 @@ static void phpb_params_init(void)
 	phpb_params[PHPB_PARAM_CPU].tt = 20;
 	phpb_params[PHPB_PARAM_CPU].tp = 20;
 #endif
-	strcpy(phpb_params[PHPB_PARAM_CPU].type, "cpu");
+	strncpy(phpb_params[PHPB_PARAM_CPU].type, "cpu", 3);
+	phpb_params[PHPB_PARAM_CPU].type[3] = '\0';
 
 #if defined(CLATM_SET_INIT_CFG)
 	phpb_params[PHPB_PARAM_GPU].tt = CLATM_INIT_CFG_PHPB_GPU_TT;
@@ -1689,7 +1696,8 @@ static void phpb_params_init(void)
 	phpb_params[PHPB_PARAM_GPU].tt = 80;
 	phpb_params[PHPB_PARAM_GPU].tp = 80;
 #endif
-	strcpy(phpb_params[PHPB_PARAM_GPU].type, "gpu");
+	strncpy(phpb_params[PHPB_PARAM_GPU].type, "gpu", 3);
+	phpb_params[PHPB_PARAM_GPU].type[3] = '\0';
 }
 #endif	/* PRECISE_HYBRID_POWER_BUDGET */
 
@@ -2006,6 +2014,13 @@ static int krtatm_thread(void *arg)
 			if (krtatm_prev_maxtj == 0)
 				krtatm_prev_maxtj = atm_prev_maxtj;
 			_adaptive_power_calc(krtatm_prev_maxtj, krtatm_curr_maxtj, (unsigned int) gpu_loading);
+
+			/* To confirm if krtatm kthread is really running. */
+			if (krtatm_curr_maxtj >= 100000 || (krtatm_curr_maxtj - krtatm_prev_maxtj >= 20000))
+				tscpu_warn("%s c %d p %d cl %d gl %d s %d\n", __func__,
+					krtatm_curr_maxtj, krtatm_prev_maxtj,
+					adaptive_cpu_power_limit, adaptive_gpu_power_limit,
+					cl_dev_adp_cpu_state_active);
 		}
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule();

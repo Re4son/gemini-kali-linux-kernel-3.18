@@ -209,7 +209,7 @@ ktime_t dvfs_cb_step_delta[16];
 
 /* 750Mhz */
 #define DEFAULT_B_FREQ_IDX 13
-#define BOOST_B_FREQ_IDX 9 /* 1.5G */
+#define BOOST_B_FREQ_IDX 0
 
 /* for DVFS OPP table LL/FY */
 #define CPU_DVFS_FREQ0_LL_FY    (1391000)	/* KHz */
@@ -992,7 +992,6 @@ int release_dvfs = 0;
 int thres_ll = 0;
 int thres_l = 0;
 int thres_b = 0;
-int smart = 0;
 
 #define CPUFREQ_EFUSE_INDEX     (3)
 #define FUNC_CODE_EFUSE_INDEX	(22)
@@ -1038,8 +1037,7 @@ static unsigned int _mt_cpufreq_get_cpu_level(void)
 	else if (func_code_1 == 4) {
 		lv = CPU_LEVEL_1;
 		is_tt_segment = 1;
-	}
-	else
+	} else
 		lv = CPU_LEVEL_0;
 
 	/* get CPU clock-frequency from DT */
@@ -3917,21 +3915,20 @@ static int _cpufreq_set_locked(struct mt_cpu_dvfs *p, unsigned int cur_khz, unsi
 	}
 
 	if (cur_khz != get_turbo_freq(p->cpu_id, target_khz)) {
-		if (log || do_dvfs_stress_test) {
+		/*if (log || do_dvfs_stress_test)
 			cpufreq_dbg
-				("@%s(), %s:(%d,%d): freq=%d(%d), volt=%d(%d), on=%d, cur=%d, cci(%d,%d), log(%d), stress(%d)\n",
+				("@%s(), %s:(%d,%d): freq=%d(%d), volt =%d(%d), on=%d, cur=%d, cci(%d,%d)\n",
 				 __func__, cpu_dvfs_get_name(p), p->idx_opp_ppm_base, p->idx_opp_ppm_limit,
 				 target_khz, get_turbo_freq(p->cpu_id, target_khz), target_volt,
 				 get_turbo_volt(p->cpu_id, target_volt), num_online_cpus(), cur_khz,
-				 cur_cci_khz, target_cci_khz, log, do_dvfs_stress_test);
-//		else
-//			cpufreq_ver
-//				("@%s(), %s:(%d,%d): freq=%d(%d), volt =%d(%d), on=%d, cur=%d, cci(%d,%d)\n",
-//				 __func__, cpu_dvfs_get_name(p), p->idx_opp_ppm_base, p->idx_opp_ppm_limit,
-//				 target_khz, get_turbo_freq(p->cpu_id, target_khz), target_volt,
-//				 get_turbo_volt(p->cpu_id, target_volt), num_online_cpus(), cur_khz,
-//				 cur_cci_khz, target_cci_khz);
-		}
+				 cur_cci_khz, target_cci_khz);
+		else
+			cpufreq_ver
+				("@%s(), %s:(%d,%d): freq=%d(%d), volt =%d(%d), on=%d, cur=%d, cci(%d,%d)\n",
+				 __func__, cpu_dvfs_get_name(p), p->idx_opp_ppm_base, p->idx_opp_ppm_limit,
+				 target_khz, get_turbo_freq(p->cpu_id, target_khz), target_volt,
+				 get_turbo_volt(p->cpu_id, target_volt), num_online_cpus(), cur_khz,
+				 cur_cci_khz, target_cci_khz);*/
 	}
 
 	target_volt = get_turbo_volt(p->cpu_id, target_volt);
@@ -4349,9 +4346,7 @@ static int __cpuinit _mt_cpufreq_cpu_CB(struct notifier_block *nfb, unsigned lon
 				if (cpu_dvfs_is(p, MT_CPU_DVFS_B) && (action == CPU_ONLINE)) {
 					aee_record_cpu_dvfs_cb(4);
 
-					/* if (smart) */
 					new_opp_idx = BOOST_B_FREQ_IDX;
-
 					new_opp_idx = MAX(new_opp_idx, _calc_new_opp_idx(p, new_opp_idx));
 
 					/* Get cci opp idx */
@@ -6138,7 +6133,8 @@ static ssize_t cpufreq_freq_proc_write(struct file *file, const char __user *buf
 	unsigned long flags;
 	struct mt_cpu_dvfs *p = (struct mt_cpu_dvfs *)PDE_DATA(file_inode(file));
 	unsigned int cur_freq;
-	int freq, i, found;
+	int freq, i;
+	int found = 0;
 	int rc;
 
 	char *buf = _copy_from_user_for_proc(buffer, count);
@@ -6424,43 +6420,6 @@ static ssize_t cpufreq_up_threshold_b_proc_write(struct file *file,
 	return count;
 }
 
-static int cpufreq_smart_detect_proc_show(struct seq_file *m, void *v)
-{
-	unsigned long flags;
-
-	cpufreq_lock(flags);
-	seq_printf(m, "smart_detect = %d\n", smart);
-	cpufreq_unlock(flags);
-
-	return 0;
-}
-
-static ssize_t cpufreq_smart_detect_proc_write(struct file *file,
-	const char __user *buffer, size_t count, loff_t *pos)
-{
-	unsigned long flags;
-	int mv;
-	int rc;
-
-	char *buf = _copy_from_user_for_proc(buffer, count);
-
-	if (!buf)
-		return -EINVAL;
-	rc = kstrtoint(buf, 10, &mv);
-	if (rc < 0) {
-		cpufreq_err("echo 1 or 0 > /proc/cpufreq/smart_detect\n");
-	} else {
-		cpufreq_lock(flags);
-		cpufreq_ver("smart_detect change to %d\n", smart);
-		smart = mv;
-		cpufreq_unlock(flags);
-	}
-
-	free_page((unsigned long)buf);
-
-	return count;
-}
-
 /* cpufreq_time_profile */
 static int cpufreq_dvfs_time_profile_proc_show(struct seq_file *m, void *v)
 {
@@ -6475,7 +6434,6 @@ static int cpufreq_dvfs_time_profile_proc_show(struct seq_file *m, void *v)
 static ssize_t cpufreq_dvfs_time_profile_proc_write(struct file *file, const char __user *buffer,
 	size_t count, loff_t *pos)
 {
-	struct mt_cpu_dvfs *p = (struct mt_cpu_dvfs *)PDE_DATA(file_inode(file));
 	unsigned int temp;
 	int rc;
 	int i;
@@ -6487,7 +6445,7 @@ static ssize_t cpufreq_dvfs_time_profile_proc_write(struct file *file, const cha
 
 	rc = kstrtoint(buf, 10, &temp);
 	if (rc < 0)
-		cpufreq_err("echo 0/1 > /proc/cpufreq/%s/cpufreq_dvfs_time_profile\n", p->name);
+		cpufreq_err("echo 1 > /proc/cpufreq/cpufreq_dvfs_time_profile\n");
 	else {
 		if (temp == 1) {
 			for (i = 0; i < NR_SET_V_F; i++)
@@ -6546,7 +6504,6 @@ PROC_FOPS_RW(cpufreq_idvfs_mode);
 PROC_FOPS_RW(cpufreq_up_threshold_ll);
 PROC_FOPS_RW(cpufreq_up_threshold_l);
 PROC_FOPS_RW(cpufreq_up_threshold_b);
-PROC_FOPS_RW(cpufreq_smart_detect);
 
 static int _create_procfs(void)
 {
@@ -6571,7 +6528,6 @@ static int _create_procfs(void)
 		PROC_ENTRY(cpufreq_up_threshold_ll),
 		PROC_ENTRY(cpufreq_up_threshold_l),
 		PROC_ENTRY(cpufreq_up_threshold_b),
-		PROC_ENTRY(cpufreq_smart_detect),
 		PROC_ENTRY(cpufreq_idvfs_mode),
 		PROC_ENTRY(cpufreq_dvfs_time_profile),
 	};

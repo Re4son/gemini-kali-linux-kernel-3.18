@@ -1148,6 +1148,7 @@ int ext_disp_config_input_multiple(disp_session_input_config *input, int idx, un
 		}
 	} else {
 		OVL_CONFIG_STRUCT ovl_config;
+
 		_convert_disp_input_to_ovl(&ovl_config, &(input->config[0]));
 		dprec_mmp_dump_ovl_layer(&ovl_config, input->config[0].layer_id, 2);
 
@@ -1195,6 +1196,7 @@ int ext_disp_get_max_layer(void)
 int ext_disp_is_alive(void)
 {
 	unsigned int temp = 0;
+
 	EXT_DISP_FUNC();
 	_ext_disp_path_lock();
 	temp = pgc->state;
@@ -1239,6 +1241,7 @@ int ext_disp_is_video_mode(void)
 int ext_disp_diagnose(void)
 {
 	int ret = 0;
+
 	if (is_context_inited > 0) {
 		EXT_DISP_LOG("ext_disp_diagnose, is_context_inited --%d\n", is_context_inited);
 		dpmgr_check_status(pgc->dpmgr_handle);
@@ -1389,6 +1392,7 @@ int ext_disp_wait_ovl_available(int ovl_num)
 bool ext_disp_path_source_is_RDMA(unsigned int session)
 {
 	bool is_rdma = false;
+
 	if ((ext_disp_mode == EXTD_RDMA_DPI_MODE && pgc->ovl_req_state != EXTD_OVL_REMOVE_REQ
 	    && pgc->ovl_req_state != EXTD_OVL_REMOVING)
 	    || (ext_disp_mode == EXTD_DIRECT_LINK_MODE && pgc->ovl_req_state == EXTD_OVL_INSERT_REQ)) {

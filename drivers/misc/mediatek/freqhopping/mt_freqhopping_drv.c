@@ -60,7 +60,7 @@ static int mt_fh_drv_probe(struct platform_device *dev)
 	if (err)
 		FH_MSG("register fh driver error!");
 
-	return err;
+	return 0;
 }
 
 static int mt_fh_drv_remove(struct platform_device *dev)
@@ -76,7 +76,15 @@ static int mt_fh_drv_remove(struct platform_device *dev)
 
 static void mt_fh_drv_shutdown(struct platform_device *dev)
 {
+	int id = 0;
+
 	FH_MSG("mt_fh_shutdown");
+
+	pr_alert("Disable SSC before system reset.\n");
+
+	for (id = 0; id < FH_PLL_COUNT; id++)
+		freqhopping_config(id, 0, false);
+
 }
 
 static int mt_fh_drv_suspend(struct platform_device *dev, pm_message_t state)
@@ -97,6 +105,13 @@ static int mt_fh_drv_resume(struct platform_device *dev)
 	return 0;
 }
 
+#ifdef CONFIG_OF
+static const struct of_device_id mt_fhctl_of_match[] = {
+	{ .compatible = "mediatek,FHCTL", },
+	{ .compatible = "mediatek,fhctl", },
+	{},
+};
+#endif
 
 static struct platform_driver freqhopping_driver = {
 	.probe = mt_fh_drv_probe,
@@ -107,6 +122,9 @@ static struct platform_driver freqhopping_driver = {
 	.driver = {
 		   .name = FREQ_HOPPING_DEVICE,
 		   .owner = THIS_MODULE,
+#ifdef CONFIG_OF
+		   .of_match_table = mt_fhctl_of_match,
+#endif
 		   },
 };
 #endif
@@ -442,7 +460,8 @@ static int freqhopping_dvfs_proc_open(struct inode *inode, struct file *file)
 static ssize_t freqhopping_dvfs_proc_write(struct file *file, const char *buffer, size_t count,
 					   loff_t *data)
 {
-	return (ssize_t) (g_p_fh_hal_drv->proc.dvfs_write(file, buffer, count, data));
+	/* return (ssize_t) (g_p_fh_hal_drv->proc.dvfs_write(file, buffer, count, data)); */
+	return (ssize_t) 0;
 }
 
 static int freqhopping_dumpregs_proc_open(struct inode *inode, struct file *file)

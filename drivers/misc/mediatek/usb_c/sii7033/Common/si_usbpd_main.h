@@ -671,7 +671,7 @@ void sii_rcv_usbpd_data(struct sii70xx_drv_context *drv_context);
 bool usbipd_send_soft_reset(struct sii70xx_drv_context *drv_context, enum ctrl_msg type);
 void change_drp_pwr_role(struct sii_usbp_policy_engine *pUsbpd);
 void set_70xx_mode(struct sii70xx_drv_context *drv_context, enum phy_drp_config drp_role);
-void update_typec_status(struct sii_typec *ptypec_dev, bool status, bool is_dfp);
+void update_typec_status(struct sii_typec *ptypec_dev, bool is_dfp, bool status);
 void set_cc_reset(struct sii70xx_drv_context *drv_context, bool is_set);
 void set_pd_reset(struct sii70xx_drv_context *drv_context, bool is_set);
 void usbpd_ufp_exit(struct sii_usbp_policy_engine *pUsbpd);
@@ -711,7 +711,7 @@ int sii_drv_get_sr_cap(struct sii70xx_drv_context *drv_context, uint8_t portnum)
 int sii_usbpd_req_src_cap(struct sii70xx_drv_context *drv_context, uint8_t portnum);
 int sii_usbpd_give_src_cap(struct sii_usbp_policy_engine *pUsbpd, uint8_t portnum);
 void sii70xx_platform_reset(struct sii70xx_drv_context *drv_context);
-bool sii_drv_set_custom_msg(struct sii70xx_drv_context *drv_context,
+int sii_drv_set_custom_msg(struct sii70xx_drv_context *drv_context,
 			    uint8_t bus_id, uint8_t data, bool enable);
 bool usbpd_svdm_init_resp_nak(struct sii_usbpd_protocol *pd, uint8_t cmd,
 			      uint16_t svid0, bool is_rcvd, uint32_t *vdo);

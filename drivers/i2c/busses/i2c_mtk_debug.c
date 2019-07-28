@@ -341,7 +341,7 @@ static ssize_t set_config(struct device *dev, struct device_attribute *attr, con
 	int operation;
 	int wr_number = 0;
 	int rd_number = 0;
-
+	int data_len = 0;
 	int length = 0;
 	void *vir_addr_wr = NULL;
 	void *vir_addr_rd = NULL;
@@ -352,13 +352,13 @@ static ssize_t set_config(struct device *dev, struct device_attribute *attr, con
 
 	pr_alert("%s\n", buf);
 	scanf_ret = sscanf
-	    (buf, "%d %x %d %d %d %1023s", &bus_id, &address, &operation, &wr_number, &rd_number,
-	     data_buffer);
+	    (buf, "%d %x %d %d %d %d %1023s", &bus_id, &address, &operation, &wr_number, &rd_number,
+	     &data_len, data_buffer);
 	if (scanf_ret) {
 		pr_alert("bus_id:%d,address:%x,operation:0x%x\n",
 		       bus_id, address, operation);
 		if ((address != 0) && (operation <= 2)) {
-			length = strlen(data_buffer);
+			length = 2 * data_len;
 
 			if (operation == 1) {
 				if ((length >> 1) != wr_number)
@@ -517,24 +517,28 @@ static struct platform_driver i2c_common_driver = {
 	.remove = i2c_common_remove,
 };
 
-
+#if 0
 /* platform device */
 static struct platform_device i2c_common_device = {
 	.name = "mt-iicd",
 };
+#endif
 
 static int __init xxx_init(void)
 {
-	int err;
+	int err = 0;
 
+#if 0
 	pr_alert("i2c_common device init\n");
 	err = platform_device_register(&i2c_common_device);
 	if (err)
 		return err;
-
+#endif
 	err = platform_driver_register(&i2c_common_driver);
+#if 0
 	if (err)
 		platform_device_unregister(&i2c_common_device);
+#endif
 
 	return err;
 }
@@ -542,7 +546,7 @@ static int __init xxx_init(void)
 static void __exit xxx_exit(void)
 {
 	platform_driver_unregister(&i2c_common_driver);
-	platform_device_unregister(&i2c_common_device);
+	/* platform_device_unregister(&i2c_common_device); */
 }
 module_init(xxx_init);
 module_exit(xxx_exit);

@@ -768,7 +768,7 @@ int ccci_load_firmware(int md_id, void *img_inf, char img_err_str[], char post_f
 		return -CCCI_ERR_INVALID_PARAM;
 	}
 
-	md_type_val = get_modem_support_cap(md_id);
+	md_type_val = get_legacy_md_type(md_id);
 	if ((md_type_val > 0) && (md_type_val < modem_ultg)) {
 		i = md_type_val;
 		scan_max = md_type_val;

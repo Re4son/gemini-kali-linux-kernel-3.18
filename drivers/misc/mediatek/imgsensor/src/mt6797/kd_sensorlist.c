@@ -109,7 +109,6 @@ static DEFINE_SPINLOCK(kdsensor_drv_lock);
 #define SUPPORT_I2C_BUS_NUM1        0
 #define SUPPORT_I2C_BUS_NUM2        2
 */
-	//单摄像头CCT连接不上
 //#define SINGLE_CAMERA_FOR_CCT
 
 #ifdef SINGLE_CAMERA_FOR_CCT
@@ -1873,38 +1872,6 @@ int kdSetExpGain(CAMERA_DUAL_CAMERA_SENSOR_ENUM InvokeCamera)
 }
 
 /*******************************************************************************
-*
-********************************************************************************/
-static UINT32 ms_to_jiffies(MUINT32 ms)
-{
-    return ((ms * HZ + 512) >> 10);
-}
-
-
-int kdSensorSetExpGainWaitDone(int *ptime)
-{
-    int timeout;
-    PK_DBG("[kd_sensorlist]enter kdSensorSetExpGainWaitDone: time: %d\n", *ptime);
-    timeout = wait_event_interruptible_timeout(
-        kd_sensor_wait_queue,
-        (setExpGainDoneFlag & 1),
-        ms_to_jiffies(*ptime));
-
-    PK_DBG("[kd_sensorlist]after wait_event_interruptible_timeout\n");
-    if (timeout == 0) {
-    PK_ERR("[kd_sensorlist] kdSensorSetExpGainWait: timeout=%d\n", *ptime);
-
-    return -EAGAIN;
-    }
-
-    return 0;   /* No error. */
-
-}
-
-
-
-
-/*******************************************************************************
 * adopt_CAMERA_HW_Open
 ********************************************************************************/
 inline static int adopt_CAMERA_HW_Open(void)
@@ -2913,6 +2880,7 @@ inline static int adopt_CAMERA_HW_Control(void *pBuf)
 /*******************************************************************************
 * adopt_CAMERA_HW_FeatureControl
 ********************************************************************************/
+#define FEATURE_PARA_LENGTH_MAX 0x10000
 inline static int  adopt_CAMERA_HW_FeatureControl(void *pBuf)
 {
     ACDK_SENSOR_FEATURECONTROL_STRUCT *pFeatureCtrl = (ACDK_SENSOR_FEATURECONTROL_STRUCT *)pBuf;
@@ -2942,7 +2910,11 @@ inline static int  adopt_CAMERA_HW_FeatureControl(void *pBuf)
 			PK_ERR(" NULL arg.\n");
 			return -EFAULT;
 		}
-		if (copy_from_user((void *)&FeatureParaLen , (void *) pFeatureCtrl->pFeatureParaLen, sizeof(unsigned int))) {
+
+		if (copy_from_user((void *)&FeatureParaLen,
+				(void *)pFeatureCtrl->pFeatureParaLen,
+				sizeof(unsigned int)) ||
+				FeatureParaLen > FEATURE_PARA_LENGTH_MAX) {
 			PK_ERR(" ioctl copy from user failed\n");
 			return -EFAULT;
 		}
@@ -3554,11 +3526,22 @@ inline static int  adopt_CAMERA_HW_FeatureControl(void *pBuf)
 
 	case SENSOR_FEATURE_GET_PDAF_DATA:
 		{
+#define PDAF_DATA_SIZE 4096
 			char *pPdaf_data = NULL;
 
 			unsigned long long *pFeaturePara_64=(unsigned long long *) pFeaturePara;
 			void *usr_ptr = (void *)(uintptr_t)(*(pFeaturePara_64 + 1));
 			#if 1
+			kal_uint32 buf_sz = (kal_uint32) (*(pFeaturePara_64 + 2));
+
+			/* buffer size exam */
+			if (buf_sz > PDAF_DATA_SIZE) {
+				kfree(pFeaturePara);
+				PK_ERR(" buffer size (%u) can't larger than %d bytes\n",
+					  buf_sz, PDAF_DATA_SIZE);
+				return -EINVAL;
+			}
+
 			pPdaf_data = kmalloc(sizeof(char) * PDAF_DATA_SIZE, GFP_KERNEL);
 			if (pPdaf_data == NULL) {
 				kfree(pFeaturePara);
@@ -3582,10 +3565,9 @@ inline static int  adopt_CAMERA_HW_FeatureControl(void *pBuf)
 				PK_DBG("[CAMERA_HW]ERROR:NULL g_pSensorFunc\n");
 			}
 
-			if (copy_to_user
-			    ((void __user *)usr_ptr, (void *)pPdaf_data,
-			     (kal_uint32) (*(pFeaturePara_64 + 2)))) {
-				PK_DBG("[CAMERA_HW]ERROR: copy_to_user fail \n");
+			if (copy_to_user((void __user *)usr_ptr,
+					 (void *)pPdaf_data, buf_sz)) {
+				PK_DBG("[CAMERA_HW]ERROR: copy_to_user fail\n");
 			}
 			kfree(pPdaf_data);
 			*(pFeaturePara_64 + 1) =(uintptr_t) usr_ptr;
@@ -4484,7 +4466,6 @@ static long CAMERA_HW_Ioctl(
         break;
 
     case KDIMGSENSORIOC_X_SET_SHUTTER_GAIN_WAIT_DONE:
-        i4RetValue = kdSensorSetExpGainWaitDone((int *)pBuff);
         break;
 
     case KDIMGSENSORIOC_X_SET_CURRENT_SENSOR:
@@ -5523,12 +5504,12 @@ static int proc_set_pdaf_type_open(struct inode *inode, struct file *file)
     return single_open(file, pdaf_type_info_read, NULL);
 };
 
-	
+
 static ssize_t  proc_set_pdaf_type_write(struct file *file, const char *buffer, size_t count, loff_t *data)
 {
     char regBuf[64] = {'\0'};
     u32 u4CopyBufSize = (count < (sizeof(regBuf) - 1)) ? (count) : (sizeof(regBuf) - 1);
-	
+
     if( copy_from_user(regBuf, buffer, u4CopyBufSize))
     {
         return -EFAULT;

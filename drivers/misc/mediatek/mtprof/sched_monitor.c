@@ -392,9 +392,9 @@ void mt_trace_rqlock_start(raw_spinlock_t *lock)
 void mt_trace_rqlock_end(raw_spinlock_t *lock)
 {
 	struct sched_lock_event *lock_e;
-	struct task_struct *owner = NULL;
 
 #ifdef CONFIG_DEBUG_SPINLOCK
+	struct task_struct *owner = NULL;
 	if (lock->owner && lock->owner != SPINLOCK_OWNER_INIT)
 		owner = lock->owner;
 #endif
@@ -755,7 +755,6 @@ void mt_sched_monitor_switch(int on)
 {
 	int cpu;
 
-	preempt_disable_notrace();
 	mutex_lock(&mt_sched_mon_lock);
 	for_each_possible_cpu(cpu) {
 		pr_emerg("[mtprof] sched monitor on CPU#%d switch from %d to %d\n", cpu,
@@ -763,7 +762,6 @@ void mt_sched_monitor_switch(int on)
 		per_cpu(mtsched_mon_enabled, cpu) = on;	/* 0x1 || 0x2, IRQ & Preempt */
 	}
 	mutex_unlock(&mt_sched_mon_lock);
-	preempt_enable_notrace();
 }
 
 static ssize_t mt_sched_monitor_write(struct file *filp, const char *ubuf,
@@ -828,6 +826,9 @@ static ssize_t mt_sched_monitor_##param##_write(			\
 	if (ret < 0)							\
 		return ret;							\
 											\
+	if (val < TIME_3MS)							\
+		val = TIME_3MS;							\
+											\
 	warn_dur = val;							\
 											\
 	return cnt;								\
@@ -869,6 +870,14 @@ static int __init init_mtsched_mon(void)
 	int cpu;
 	struct proc_dir_entry *pe;
 
+	WARN_ISR_DUR = TIME_3MS;
+	WARN_SOFTIRQ_DUR = TIME_5MS;
+	WARN_TASKLET_DUR = TIME_10MS;
+	WARN_HRTIMER_DUR = TIME_3MS;
+	WARN_STIMER_DUR = TIME_10MS;
+	WARN_BURST_IRQ_DETECT = 25000;
+	WARN_PREEMPT_DUR = TIME_10MS;
+
 	for_each_possible_cpu(cpu) {
 		per_cpu(MT_stack_trace, cpu).entries =
 		    kmalloc(MAX_STACK_TRACE_DEPTH * sizeof(unsigned long), GFP_KERNEL);
@@ -881,14 +890,6 @@ static int __init init_mtsched_mon(void)
 		per_cpu(hrt_mon, cpu).type = evt_HRTIMER;
 		per_cpu(sft_mon, cpu).type = evt_STIMER;
 	}
-
-	WARN_ISR_DUR = TIME_3MS;
-	WARN_SOFTIRQ_DUR = TIME_5MS;
-	WARN_TASKLET_DUR = TIME_10MS;
-	WARN_HRTIMER_DUR = TIME_3MS;
-	WARN_STIMER_DUR = TIME_10MS;
-	WARN_BURST_IRQ_DETECT = 25000;
-	WARN_PREEMPT_DUR = TIME_10MS;
 
 	if (!proc_mkdir("mtmon", NULL))
 		return -1;

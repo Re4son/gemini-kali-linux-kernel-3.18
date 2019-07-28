@@ -1,5 +1,6 @@
 menuconfig MTK_NFC
 	tristate "NFC drivers"
+	depends on !MTK_ENABLE_GMO
 	default n
 	---help---
 	  Say Y here for supporting NFC.
@@ -10,6 +11,7 @@ if MTK_NFC
 
 config NFC_MT6605 # MTK_NFC
 	tristate "MediaTek NFC driver"
+	depends on !MTK_ENABLE_GMO
 	default n
 	help
 	  Y means NFC_MT6605 define if use Mediatek NFC Function to provide reader
@@ -25,3 +27,9 @@ config NFC_MSR3110
 	  Card emulation or P2P function. If you are not sure about this, set n.
 
 endif # NFC
+
+config NFC_CHIP_SUPPORT
+	tristate "STMicroelectronics ST21NFC NFC Controller Driver"
+	depends on I2C
+	help
+	  STMicroelectronics ST21NFC Near Field Communication controller support.

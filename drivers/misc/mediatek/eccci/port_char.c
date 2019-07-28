@@ -93,6 +93,7 @@ static ssize_t dev_char_read(struct file *file, char *buf, size_t count, loff_t 
 {
 	struct ccci_port *port = file->private_data;
 	struct sk_buff *skb = NULL;
+	struct ccci_header *ccci_h;
 	int ret = 0, read_len = 0, full_req_done = 0;
 	unsigned long flags = 0;
 
@@ -143,6 +144,25 @@ READ_START:
 		}
 	} else {
 		read_len = count;
+	}
+	/* ensure rx_skb_list only has one the same ioctl cmd in port ccci_monitor */
+	/* to avoid port ccci_monitor rx full issue caused by ioctl_fuzzer64 test */
+	if (port->rx_ch == CCCI_MONITOR_CH) {
+		ccci_h = (struct ccci_header *)skb->data;
+		if (ccci_h->data[1] == CCCI_MD_MSG_FORCE_STOP_REQUEST)
+			port->force_stop_cnt--;
+		else if (ccci_h->data[1] == CCCI_MD_MSG_FLIGHT_STOP_REQUEST)
+			port->flight_stop_cnt--;
+		else if (ccci_h->data[1] == CCCI_MD_MSG_FORCE_START_REQUEST)
+			port->force_start_cnt--;
+		else if (ccci_h->data[1] == CCCI_MD_MSG_FLIGHT_START_REQUEST)
+			port->flight_start_cnt--;
+		else if (ccci_h->data[1] == CCCI_MD_MSG_RESET_REQUEST)
+			port->reset_cnt--;
+		else if (ccci_h->data[1] == CCCI_MD_MSG_STORE_NVRAM_MD_TYPE)
+			port->store_md_type_cnt--;
+		else if (ccci_h->data[1] == CCCI_MD_MSG_CFG_UPDATE)
+			port->cfg_update_cnt--;
 	}
 	spin_unlock_irqrestore(&port->rx_skb_list.lock, flags);
 	if (port->flags & PORT_F_CH_TRAFFIC)
@@ -377,6 +397,10 @@ static int port_char_init(struct ccci_port *port)
 
 	CCCI_DEBUG_LOG(md_id, CHAR, "char port %s is initializing\n", port->name);
 	dev = kmalloc(sizeof(struct cdev), GFP_KERNEL);
+	if (unlikely(!dev)) {
+		CCCI_ERROR_LOG(port->md_id, CHAR, "alloc char dev fail!!\n");
+		return -1;
+	}
 	cdev_init(dev, &char_dev_fops);
 	dev->owner = THIS_MODULE;
 	port->rx_length_th = MAX_QUEUE_LENGTH;
@@ -402,6 +426,8 @@ static int port_char_init(struct ccci_port *port)
 		port->rx_ch == CCCI_C2K_AT7 ||
 		port->rx_ch == CCCI_C2K_AT8)
 		port->flags |= PORT_F_CH_TRAFFIC;
+	else if (port->rx_ch == CCCI_FS_RX)
+		port->flags |= (PORT_F_CH_TRAFFIC | PORT_F_DUMP_RAW_DATA);
 
 	return ret;
 }

@@ -866,6 +866,7 @@ static void lcm_resume(void)
 
 static unsigned int lcm_compare_id(void)
 {
+        printk("nt36672,%s().\n", __func__); 
 #ifdef BUILD_LK
 	unsigned char buffer[2];
 	unsigned int array[16];
