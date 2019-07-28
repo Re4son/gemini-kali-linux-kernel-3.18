@@ -162,7 +162,7 @@ static void _mt_ocp_aee_init(void)
 #endif
 
 
-typedef struct OCP_OPT {
+struct OCP_OPT {
 	unsigned short ocp_cluster0_flag;
 	unsigned short ocp_cluster1_flag;
 	unsigned short ocp_cluster2_flag;
@@ -170,7 +170,7 @@ typedef struct OCP_OPT {
 	unsigned short ocp_cluster1_enable;
 	unsigned short ocp_cluster2_enable;
 	unsigned int ocp_cluster2_OCPAPBCFG24;
-} OCP_OPT;
+};
 
 static struct OCP_OPT ocp_opt = {
 	.ocp_cluster0_flag = 0,
@@ -182,14 +182,14 @@ static struct OCP_OPT ocp_opt = {
 	.ocp_cluster2_OCPAPBCFG24 = 0,
 };
 
-typedef struct DVFS_STAT {
+struct DVFS_STAT {
 	unsigned int Freq;
 	unsigned int Volt;
 	unsigned int Thermal;
-} DVFS_STAT;
+};
 
 
-typedef struct OCP_STAT {
+struct OCP_STAT {
 	unsigned int IntEnDis;
 	unsigned int IRQ1;
 	unsigned int IRQ0;
@@ -206,7 +206,7 @@ typedef struct OCP_STAT {
 	unsigned int CPU1RawLkg;
 	unsigned int CPU2RawLkg;
 	unsigned int CPU3RawLkg;
-} OCP_STAT;
+};
 
 static struct OCP_STAT ocp_status[3] = {
 [0] = {

@@ -1295,37 +1295,6 @@ static ssize_t aed_ke_write(struct file *filp, const char __user *buf, size_t co
 	return count;
 }
 
-static long aed_ioctl_bt(unsigned long arg)
-{
-	int ret = 0;
-	struct aee_ioctl ioctl;
-	struct aee_process_bt bt;
-
-	if (copy_from_user(&ioctl, (struct aee_ioctl __user *)arg, sizeof(struct aee_ioctl))) {
-		ret = -EFAULT;
-		return ret;
-	}
-	bt.pid = ioctl.pid;
-	ret = aed_get_process_bt(&bt);
-	if (ret == 0) {
-		ioctl.detail = 0xAEE00001;
-		ioctl.size = bt.nr_entries;
-		if (copy_to_user((struct aee_ioctl __user *)arg, &ioctl, sizeof(struct aee_ioctl))) {
-			ret = -EFAULT;
-			return ret;
-		}
-		if (!ioctl.out) {
-			ret = -EFAULT;
-		} else
-		    if (copy_to_user
-			((struct aee_bt_frame __user *)(unsigned long)ioctl.out,
-			 (const void *)bt.entries, sizeof(struct aee_bt_frame) * AEE_NR_FRAME)) {
-			ret = -EFAULT;
-		}
-	}
-	return ret;
-}
-
 /*
  * aed process daemon and other command line may access me
  * concurrently
@@ -1334,10 +1303,6 @@ DEFINE_SEMAPHORE(aed_dal_sem);
 static long aed_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	int ret = 0;
-
-	if (cmd == AEEIOCTL_GET_PROCESS_BT)
-		return aed_ioctl_bt(arg);
-
 
 	if (down_interruptible(&aed_dal_sem) < 0)
 		return -ERESTARTSYS;
@@ -1385,8 +1350,10 @@ static long aed_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			/* Try to prevent overrun */
 			dal_show->msg[sizeof(dal_show->msg) - 1] = 0;
 #ifdef CONFIG_MTK_FB
-			LOGD("AEE CALL DAL_Printf now\n");
-			DAL_Printf("%s", dal_show->msg);
+			if (!strncmp(current->comm, "aee_aed", 7)) {
+				LOGD("AEE CALL DAL_Printf now\n");
+				DAL_Printf("%s", dal_show->msg);
+			}
 #endif
 
  OUT:
@@ -1427,10 +1394,12 @@ static long aed_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				goto EXIT;
 			}
 #ifdef CONFIG_MTK_FB
-			LOGD("AEE CALL DAL_SetColor now\n");
-			DAL_SetColor(dal_setcolor.foreground, dal_setcolor.background);
-			LOGD("AEE CALL DAL_SetScreenColor now\n");
-			DAL_SetScreenColor(dal_setcolor.screencolor);
+			if (!strncmp(current->comm, "aee_aed", 7)) {
+				LOGD("AEE CALL DAL_SetColor now\n");
+				DAL_SetColor(dal_setcolor.foreground, dal_setcolor.background);
+				LOGD("AEE CALL DAL_SetScreenColor now\n");
+				DAL_SetScreenColor(dal_setcolor.screencolor);
+			}
 #endif
 			break;
 		}
@@ -1459,15 +1428,14 @@ static long aed_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				struct task_struct *task;
 				struct pt_regs *user_ret = NULL;
 
-				rcu_read_lock();
+				read_lock(&tasklist_lock);
 				task = find_task_by_vpid(tmp->tid);
 				if (task == NULL) {
-					rcu_read_unlock();
 					kfree(tmp);
+					read_unlock(&tasklist_lock);
 					ret = -EINVAL;
 					goto EXIT;
 				}
-				rcu_read_unlock();
 
 				user_ret = task_pt_regs(task);
 				memcpy(&(tmp->regs), user_ret, sizeof(struct pt_regs));
@@ -1475,9 +1443,11 @@ static long aed_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				    ((struct aee_thread_reg __user *)arg, tmp,
 				     sizeof(struct aee_thread_reg))) {
 					kfree(tmp);
+					read_unlock(&tasklist_lock);
 					ret = -EFAULT;
 					goto EXIT;
 				}
+				read_unlock(&tasklist_lock);
 
 			} else {
 				LOGD("%s: get thread registers ioctl tid invalid\n", __func__);
@@ -1517,31 +1487,33 @@ static long aed_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				struct task_struct *task;
 				int dumpable = -1;
 
-				rcu_read_lock();
+				read_lock(&tasklist_lock);
 				task = find_task_by_vpid(pid);
 				if (task == NULL) {
-					rcu_read_unlock();
 					LOGD("%s: process:%d task null\n", __func__, pid);
-					ret = -EINVAL;
-					goto EXIT;
-				}
-				rcu_read_unlock();
-
-				if (task->mm == NULL) {
-					LOGD("%s: process:%d task mm null\n", __func__, pid);
+					read_unlock(&tasklist_lock);
 					ret = -EINVAL;
 					goto EXIT;
 				}
 
 				task_lock(task);
+				if (task->mm == NULL) {
+					LOGD("%s: process:%d task mm null\n", __func__, pid);
+					task_unlock(task);
+					read_unlock(&tasklist_lock);
+					ret = -EINVAL;
+					goto EXIT;
+				}
+
 				dumpable = get_dumpable(task->mm);
-				if ((dumpable == 0) && (task->mm != NULL)) {
+				if (dumpable == 0) {
 					LOGD("%s: set process:%d dumpable\n", __func__, pid);
 					set_dumpable(task->mm, 1);
 				} else
 					LOGD("%s: get process:%d dumpable:%d\n", __func__, pid,
 					     dumpable);
 				task_unlock(task);
+				read_unlock(&tasklist_lock);
 			} else {
 				LOGD("%s: check suid dumpable ioctl pid invalid\n", __func__);
 				ret = -EINVAL;
@@ -1695,11 +1667,6 @@ int DumpThreadNativeInfo(struct aee_oops *oops)
 		file = vma->vm_file;
 		flags = vma->vm_flags;
 		if (file) {
-			LOGE("%08lx-%08lx %c%c%c%c    %s\n", vma->vm_start, vma->vm_end,
-			     flags & VM_READ ? 'r' : '-',
-			     flags & VM_WRITE ? 'w' : '-',
-			     flags & VM_EXEC ? 'x' : '-',
-			     flags & VM_MAYSHARE ? 's' : 'p', (unsigned char *)(file->f_path.dentry->d_iname));
 			Log2Buffer(oops, "%08lx-%08lx %c%c%c%c    %s\n", vma->vm_start, vma->vm_end,
 					flags & VM_READ ? 'r' : '-',
 					flags & VM_WRITE ? 'w' : '-',
@@ -1726,11 +1693,6 @@ int DumpThreadNativeInfo(struct aee_oops *oops)
 			/* if (name) */
 			{
 
-				LOGE("%08lx-%08lx %c%c%c%c    %s\n", vma->vm_start, vma->vm_end,
-				     flags & VM_READ ? 'r' : '-',
-				     flags & VM_WRITE ? 'w' : '-',
-				     flags & VM_EXEC ? 'x' : '-',
-				     flags & VM_MAYSHARE ? 's' : 'p', name);
 				Log2Buffer(oops, "%08lx-%08lx %c%c%c%c    %s\n", vma->vm_start, vma->vm_end,
 						flags & VM_READ ? 'r' : '-',
 						flags & VM_WRITE ? 'w' : '-',
@@ -1846,7 +1808,9 @@ static void kernel_reportAPI(const AE_DEFECT_ATTR attr, const int db_opt, const 
 	struct aee_oops *oops;
 	int n = 0;
 
-	if (aee_mode == AEE_MODE_CUSTOMER_USER || (aee_mode == AEE_MODE_CUSTOMER_ENG && attr == AE_DEFECT_WARNING))
+	if ((aee_mode == AEE_MODE_CUSTOMER_USER ||
+			(aee_mode == AEE_MODE_CUSTOMER_ENG && attr == AE_DEFECT_WARNING))
+			&& (attr != AE_DEFECT_FATAL))
 		return;
 	oops = aee_oops_create(attr, AE_KERNEL_PROBLEM_REPORT, module);
 	if (NULL != oops) {

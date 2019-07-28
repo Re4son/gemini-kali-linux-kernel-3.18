@@ -29,8 +29,8 @@
 #include <linux/errno.h>
 #include <linux/time.h>
 #include "kd_flashlight.h"
-#include <asm/io.h>
-#include <asm/uaccess.h>
+#include <linux/io.h>
+#include <linux/uaccess.h>
 #include "kd_flashlight_type.h"
 #include <linux/hrtimer.h>
 #include <linux/ktime.h>
@@ -263,8 +263,7 @@ MODULE_LICENSE("GPL v2");
 /*****************************************************************************
 Dual-flash functions
 *****************************************************************************/
-enum
-{
+enum {
 	e_DutyNum = 26,
 };
 

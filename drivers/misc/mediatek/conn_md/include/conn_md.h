@@ -65,6 +65,20 @@ typedef struct _CONN_MD_STRUCT_ {
 
 } CONN_MD_STRUCT, *P_CONN_MD_STRUCT;
 
+struct conn_md_time_struct {
+	unsigned long long sec;
+	unsigned long msec;
+};
+
+#define CONN_MD_MSG_MAX_NUM 5
+#define CONN_MD_MSG_TIME_LENGTH 16
+#define CONN_MD_BUF_SIZE (CONN_MD_MSG_MAX_NUM * CONN_MD_MSG_TIME_LENGTH)
+struct conn_md_log_msg_info {
+	struct conn_md_time_struct msg_begin_time;
+	int msg_total;
+	char msg_buf[CONN_MD_BUF_SIZE];
+};
+
 extern int conn_md_send_msg(ipc_ilm_t *ilm);
 extern int conn_md_del_user(uint32 u_id);
 extern int conn_md_add_user(uint32 u_id, CONN_MD_BRIDGE_OPS *p_ops);

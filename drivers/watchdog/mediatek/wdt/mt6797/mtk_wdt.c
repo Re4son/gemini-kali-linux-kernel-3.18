@@ -81,7 +81,7 @@ static DEFINE_SPINLOCK(rgu_reg_operation_spinlock);
 #ifndef CONFIG_KICK_SPM_WDT
 static unsigned int timeout;
 #endif
-static volatile bool  rgu_wdt_intr_has_trigger; /* For test use */
+static bool  rgu_wdt_intr_has_trigger; /* For test use */
 static int g_last_time_time_out_value;
 static int g_wdt_enable = 1;
 #ifdef CONFIG_KICK_SPM_WDT
@@ -252,8 +252,10 @@ void mtk_wdt_restart(enum wd_restart_type type)
 
 	if (!toprgu_base) {
 		toprgu_base = of_iomap(np_rgu, 0);
-		if (!toprgu_base)
+		if (!toprgu_base) {
 			pr_debug("RGU iomap failed\n");
+			return;
+		}
 		/* pr_debug("RGU base: 0x%p  RGU irq: %d\n", toprgu_base, wdt_irq_id); */
 	}
 #endif
@@ -273,7 +275,7 @@ void mtk_wdt_restart(enum wd_restart_type type)
 	#ifdef CONFIG_KICK_SPM_WDT
 		spm_wdt_restart_timer_nolock();
 	#else
-		*(volatile u32 *)(MTK_WDT_RESTART) = MTK_WDT_RESTART_KEY;
+		mt_reg_sync_writel(MTK_WDT_RESTART_KEY, MTK_WDT_RESTART);
 	#endif
 	} else
 		pr_debug("WDT:[mtk_wdt_restart] type=%d error pid =%d\n", type, current->pid);
@@ -373,7 +375,7 @@ void wdt_arch_reset(char mode)
 
 int mtk_rgu_dram_reserved(int enable)
 {
-	volatile unsigned int tmp;
+	unsigned int tmp;
 
 	if (1 == enable) {
 		/* enable ddr reserved mode */
@@ -665,12 +667,12 @@ get_wd_api(&wd_api);
 
 	aee_wdt_fiq_info(arg, regs, svc_sp);
 #if 0
-	asm volatile("mov %0, %1\n\t"
+	asm ("mov %0, %1\n\t"
 		  "mov fp, %2\n\t"
 		 : "=r" (sp)
 		 : "r" (svc_sp), "r" (preg[11])
 		 );
-	*((volatile unsigned int *)(0x00000000)); /* trigger exception */
+	*((unsigned int *)(0x00000000)); /* trigger exception */
 #endif
 }
 #else /* CONFIG_FIQ_GLUE */

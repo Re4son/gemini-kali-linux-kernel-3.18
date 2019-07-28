@@ -1437,7 +1437,7 @@ static int __too_many_isolated(struct zone *zone, int file,
 static int too_many_isolated(struct zone *zone, int file,
 		struct scan_control *sc, int safe)
 {
-	if (current_is_kswapd() || sc->hibernation_mode)
+	if (current_is_kswapd())
 		return 0;
 
 	if (!global_reclaim(sc))
@@ -1859,7 +1859,7 @@ static int inactive_anon_is_low(struct lruvec *lruvec)
 	 * If we don't have swap space, anonymous page deactivation
 	 * is pointless.
 	 */
-	if (!total_swap_pages && !IS_ENABLED(CONFIG_ZONE_MOVABLE_CMA))
+	if (!total_swap_pages)
 		return 0;
 
 	if (!mem_cgroup_disabled())
@@ -1938,7 +1938,7 @@ enum scan_balance {
 static int vmscan_swap_file_ratio = 1;
 module_param_named(swap_file_ratio, vmscan_swap_file_ratio, int, S_IRUGO | S_IWUSR);
 
-#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE)
+#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE) && defined(CONFIG_ANDROID_LOW_MEMORY_KILLER)
 
 /* vmscan debug */
 static int vmscan_swap_sum = 200;
@@ -1964,7 +1964,7 @@ static int vmscan_threshold = 3000;
 module_param_named(duration_ms, vmscan_duration_ms, int, S_IRUGO | S_IWUSR);
 module_param_named(threshold, vmscan_threshold, int, S_IRUGO | S_IWUSR);
 
-#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE)
+#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE) && defined(CONFIG_ANDROID_LOW_MEMORY_KILLER)
 /* #define LOGTAG "VMSCAN" */
 static unsigned long t;	/* 0 */
 static unsigned long history[2] = {0};
@@ -1996,7 +1996,7 @@ static void get_scan_count(struct lruvec *lruvec, int swappiness,
 	enum lru_list lru;
 	bool some_scanned;
 	int pass;
-#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE)
+#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE) && defined(CONFIG_ANDROID_LOW_MEMORY_KILLER)
 	int cpu;
 	unsigned long SwapinCount = 0, SwapoutCount = 0, cached = 0;
 	bool bThrashing = false;
@@ -2096,7 +2096,7 @@ static void get_scan_count(struct lruvec *lruvec, int swappiness,
 	 * With swappiness at 100, anonymous and file have the same priority.
 	 * This scanning priority is essentially the inverse of IO cost.
 	 */
-#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE)
+#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE) && defined(CONFIG_ANDROID_LOW_MEMORY_KILLER)
 	if (vmscan_swap_file_ratio) {
 		if (t == 0)
 			t = jiffies;
@@ -2788,11 +2788,6 @@ static unsigned long do_try_to_free_pages(struct zonelist *zonelist,
 	unsigned long total_scanned = 0;
 	unsigned long writeback_threshold;
 	bool zones_reclaimable;
-
-#ifdef CONFIG_FREEZER
-	if (unlikely(pm_freezing && !sc->hibernation_mode))
-		return 0;
-#endif
 
 	delayacct_freepages_start();
 
@@ -3712,11 +3707,6 @@ void wakeup_kswapd(struct zone *zone, int order, enum zone_type classzone_idx)
 	if (!populated_zone(zone))
 		return;
 
-#ifdef CONFIG_FREEZER
-	if (pm_freezing)
-		return;
-#endif
-
 	if (!cpuset_zone_allowed_hardwall(zone, GFP_KERNEL))
 		return;
 	pgdat = zone->zone_pgdat;
@@ -3741,7 +3731,7 @@ void wakeup_kswapd(struct zone *zone, int order, enum zone_type classzone_idx)
  * LRU order by reclaiming preferentially
  * inactive > active > active referenced > active mapped
  */
-unsigned long shrink_memory_mask(unsigned long nr_to_reclaim, gfp_t mask)
+unsigned long shrink_all_memory(unsigned long nr_to_reclaim)
 {
 	struct reclaim_state reclaim_state;
 	struct scan_control sc = {
@@ -3770,13 +3760,6 @@ unsigned long shrink_memory_mask(unsigned long nr_to_reclaim, gfp_t mask)
 
 	return nr_reclaimed;
 }
-EXPORT_SYMBOL_GPL(shrink_memory_mask);
-
-unsigned long shrink_all_memory(unsigned long nr_to_reclaim)
-{
-	return shrink_memory_mask(nr_to_reclaim, GFP_HIGHUSER_MOVABLE);
-}
-EXPORT_SYMBOL_GPL(shrink_all_memory);
 
 /* It's optimal to keep kswapds on the same CPUs as their memory, but
    not required for correctness.  So if the last cpu in a node goes

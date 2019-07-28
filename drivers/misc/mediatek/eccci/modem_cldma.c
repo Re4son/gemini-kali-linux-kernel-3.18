@@ -527,10 +527,15 @@ again:
 		port_recv_time = ((skb_alloc_time = sched_clock()) - port_recv_time);
 #endif
 		new_skb = NULL;
+new_skb_retry:
 		if (ret >= 0 || ret == -CCCI_ERR_DROP_PACKET) {
 			new_skb = ccci_alloc_skb(queue->tr_ring->pkt_size, !is_net_queue, blocking);
-			if (!new_skb)
+			if (!new_skb) {
 				CCCI_ERROR_LOG(md->index, TAG, "alloc skb fail on q%d\n", queue->index);
+				if (queue->index != 0)
+					msleep(100);
+				goto new_skb_retry;
+			}
 		}
 		if (new_skb) {
 			/* mark cldma_request as available */
@@ -1007,6 +1012,7 @@ static void cldma_queue_switch_ring(struct md_cd_queue *queue)
 	struct ccci_modem *md = queue->modem;
 	struct md_cd_ctrl *md_ctrl = (struct md_cd_ctrl *)md->private_data;
 	struct cldma_request *req;
+	struct cldma_tgpd *tgpd;
 
 	if (queue->dir == OUT) {
 		if ((1 << queue->index) & NET_RX_QUEUE_MASK) {
@@ -1022,6 +1028,24 @@ static void cldma_queue_switch_ring(struct md_cd_queue *queue)
 		queue->tr_done = req;
 		queue->tx_xmit = req;
 		queue->budget = queue->tr_ring->length;
+		/*
+		 * clear ring buffer again. during MD exception, if some one send message right after HIF_EX_INIT
+		 * (this may happened as port layer's checking is quite un-reliable), the skb will stay in ringbuffer's
+		 * 1st slot, and after we reset queue->tx_xmit to 1st slot, tx_xmit will point to this dirty slot.
+		 * so next legal message would think ring buffer is full and start waiting, but no TX_DONE interrupt
+		 *  would come to rescue it...
+		 */
+		list_for_each_entry(req, &queue->tr_ring->gpd_ring, entry) {
+			tgpd = (struct cldma_tgpd *)req->gpd;
+			cldma_write8(&tgpd->gpd_flags, 0, cldma_read8(&tgpd->gpd_flags, 0) & ~0x1);
+			if (queue->tr_ring->type != RING_GPD_BD)
+				cldma_tgpd_set_data_ptr(tgpd, 0);
+			cldma_write16(&tgpd->data_buff_len, 0, 0);
+			if (req->skb) {
+				ccci_free_skb(req->skb);
+				req->skb = NULL;
+			}
+		}
 	} else if (queue->dir == IN) {
 		if ((1 << queue->index) & NET_RX_QUEUE_MASK) {
 			if (!md->is_in_ee_dump)	/* normal mode */
@@ -2046,13 +2070,11 @@ static int md_cd_start(struct ccci_modem *md)
 
 	if (md->config.setting & MD_SETTING_FIRST_BOOT) {
 		md_cd_late_init(md);
+		CCCI_INIT_LOG(md->index, TAG, "MD_SETTING_FIRST_BOOT\n");
 		/* init security, as security depends on dummy_char, which is ready very late. */
 		ccci_init_security();
 		/* MD will clear share memory itself after the first boot */
 		memset_io(md->mem_layout.smem_region_vir, 0, md->mem_layout.smem_region_size);
-#ifdef CONFIG_MTK_ECCCI_C2K
-		memset_io(md->mem_layout.md1_md3_smem_vir, 0, md->mem_layout.md1_md3_smem_size);
-#endif
 
 #ifndef NO_POWER_OFF_ON_STARTMD
 		ret = md_cd_power_off(md, 0);
@@ -2394,11 +2416,12 @@ static int md_cd_stop(struct ccci_modem *md, unsigned int stop_type)
 	/* power off MD */
 	ret = md_cd_power_off(md, stop_type == MD_FLIGHT_MODE_ENTER ? 100 : 0);
 	CCCI_NORMAL_LOG(md->index, TAG, "CLDMA modem is power off done, %d\n", ret);
-	ccci_md_broadcast_state(md, GATED);
 
 #ifdef ENABLE_CLDMA_AP_SIDE
 	md_cldma_clear(md);
 #endif
+	ccci_md_broadcast_state(md, GATED);
+
 	/* ACK CCIF for MD. while entering flight mode, we may send something after MD slept */
 	ccci_reset_ccif_hw(md, AP_MD1_CCIF, md_ctrl->ap_ccif_base, md_ctrl->md_ccif_base);
 	md_cd_check_emi_state(md, 0);	/* Check EMI after */
@@ -2674,9 +2697,13 @@ static int md_cd_send_skb(struct ccci_modem *md, int qno, struct sk_buff *skb,
 		queue->tr_ring->handle_tx_done(queue, 0, 0, &ret);
 #endif
 		if (blocking) {
-			ret = wait_event_interruptible_exclusive(queue->req_wq, (queue->budget > 0));
+			ret = wait_event_interruptible_exclusive(queue->req_wq,
+				(queue->budget > 0 || (md->md_state != READY && ccci_h.channel == CCCI_IPC_TX)));
 			if (ret == -ERESTARTSYS) {
 				ret = -EINTR;
+				goto __EXIT_FUN;
+			} else if (md->md_state != READY && ccci_h.channel == CCCI_IPC_TX) {
+				ret = -EBUSY;
 				goto __EXIT_FUN;
 			}
 #ifdef CLDMA_TRACE
@@ -3341,23 +3368,25 @@ static ssize_t md_cd_dump_show(struct ccci_modem *md, char *buf)
 
 static ssize_t md_cd_dump_store(struct ccci_modem *md, const char *buf, size_t count)
 {
-	/* echo will bring "xxx\n" here, so we eliminate the "\n" during comparing */
-	if (strncmp(buf, "ccif", count - 1) == 0)
-		md->ops->dump_info(md, DUMP_FLAG_CCIF_REG | DUMP_FLAG_CCIF, NULL, 0);
-	if (strncmp(buf, "cldma", count - 1) == 0)
-		md->ops->dump_info(md, DUMP_FLAG_CLDMA, NULL, -1);
-	if (strncmp(buf, "register", count - 1) == 0)
-		md->ops->dump_info(md, DUMP_FLAG_REG, NULL, 0);
-	if (strncmp(buf, "smem_exp", count-1) == 0)
-		md->ops->dump_info(md, DUMP_FLAG_SMEM_EXP, NULL, 0);
-	if (strncmp(buf, "smem_ccism", count-1) == 0)
-		md->ops->dump_info(md, DUMP_FLAG_SMEM_CCISM, NULL, 0);
-	if (strncmp(buf, "image", count - 1) == 0)
-		md->ops->dump_info(md, DUMP_FLAG_IMAGE, NULL, 0);
-	if (strncmp(buf, "layout", count - 1) == 0)
-		md->ops->dump_info(md, DUMP_FLAG_LAYOUT, NULL, 0);
-	if (strncmp(buf, "mdslp", count - 1) == 0)
-		md->ops->dump_info(md, DUMP_FLAG_SMEM_MDSLP, NULL, 0);
+	if (md->md_state != GATED && md->md_state != INVALID) {
+		/* echo will bring "xxx\n" here, so we eliminate the "\n" during comparing */
+		if (strncmp(buf, "ccif", count - 1) == 0)
+			md->ops->dump_info(md, DUMP_FLAG_CCIF_REG | DUMP_FLAG_CCIF, NULL, 0);
+		if (strncmp(buf, "cldma", count - 1) == 0)
+			md->ops->dump_info(md, DUMP_FLAG_CLDMA, NULL, -1);
+		if (strncmp(buf, "register", count - 1) == 0)
+			md->ops->dump_info(md, DUMP_FLAG_REG, NULL, 0);
+		if (strncmp(buf, "smem_exp", count-1) == 0)
+			md->ops->dump_info(md, DUMP_FLAG_SMEM_EXP, NULL, 0);
+		if (strncmp(buf, "smem_ccism", count-1) == 0)
+			md->ops->dump_info(md, DUMP_FLAG_SMEM_CCISM, NULL, 0);
+		if (strncmp(buf, "image", count - 1) == 0)
+			md->ops->dump_info(md, DUMP_FLAG_IMAGE, NULL, 0);
+		if (strncmp(buf, "layout", count - 1) == 0)
+			md->ops->dump_info(md, DUMP_FLAG_LAYOUT, NULL, 0);
+		if (strncmp(buf, "mdslp", count - 1) == 0)
+			md->ops->dump_info(md, DUMP_FLAG_SMEM_MDSLP, NULL, 0);
+	}
 	return count;
 }
 
@@ -3468,58 +3497,6 @@ static ssize_t md_cd_control_store(struct ccci_modem *md, const char *buf, size_
 	return count;
 }
 
-#ifdef FEATURE_GARBAGE_FILTER_SUPPORT
-static ssize_t md_cd_filter_show(struct ccci_modem *md, char *buf)
-{
-	int count = 0;
-	int i;
-
-	count += snprintf(buf + count, 128, "register port:");
-	for (i = 0; i < GF_PORT_LIST_MAX; i++) {
-		if (gf_port_list_reg[i] != 0)
-			count += snprintf(buf + count, 128, "%d,", gf_port_list_reg[i]);
-		else
-			break;
-	}
-	count += snprintf(buf + count, 128, "\n");
-	count += snprintf(buf + count, 128, "unregister port:");
-	for (i = 0; i < GF_PORT_LIST_MAX; i++) {
-		if (gf_port_list_unreg[i] != 0)
-			count += snprintf(buf + count, 128, "%d,", gf_port_list_unreg[i]);
-		else
-			break;
-	}
-	count += snprintf(buf + count, 128, "\n");
-	return count;
-}
-
-static ssize_t md_cd_filter_store(struct ccci_modem *md, const char *buf, size_t count)
-{
-	char command[16];
-	int start_id = 0, end_id = 0, i, temp_valu;
-
-	temp_valu = sscanf(buf, "%s %d %d%*s", command, &start_id, &end_id);
-	if (temp_valu < 0)
-		CCCI_ERROR_LOG(md->index, TAG, "sscanf retrun fail: %d\n", temp_valu);
-	CCCI_NORMAL_LOG(md->index, TAG, "%s from %d to %d\n", command, start_id, end_id);
-	if (strncmp(command, "add", sizeof(command)) == 0) {
-		memset(gf_port_list_reg, 0, sizeof(gf_port_list_reg));
-		for (i = 0; i < GF_PORT_LIST_MAX && i <= (end_id - start_id); i++)
-			gf_port_list_reg[i] = start_id + i;
-		ccci_ipc_set_garbage_filter(md, 1);
-	}
-	if (strncmp(command, "remove", sizeof(command)) == 0) {
-		memset(gf_port_list_unreg, 0, sizeof(gf_port_list_unreg));
-		for (i = 0; i < GF_PORT_LIST_MAX && i <= (end_id - start_id); i++)
-			gf_port_list_unreg[i] = start_id + i;
-		ccci_ipc_set_garbage_filter(md, 0);
-	}
-	return count;
-}
-
-CCCI_MD_ATTR(NULL, filter, 0660, md_cd_filter_show, md_cd_filter_store);
-#endif
-
 static ssize_t md_cd_parameter_show(struct ccci_modem *md, char *buf)
 {
 	int count = 0;
@@ -3537,9 +3514,37 @@ static ssize_t md_cd_parameter_store(struct ccci_modem *md, const char *buf, siz
 	return count;
 }
 
+static int ee_stop_trace_en;
+static ssize_t md_cd_ee_stop_trace_store(struct ccci_modem *md, const char *buf, size_t count)
+{
+	if (md->index == MD_SYS1) {
+		if (strncmp("1", buf, 1) == 0)
+			ee_stop_trace_en = 1;
+		else
+			ee_stop_trace_en = 0;
+		CCCI_NOTICE_LOG(md->index, TAG, "change stop trace when EE value to:%d\n",
+							ee_stop_trace_en);
+	}
+	return count;
+}
+
+static ssize_t md_cd_ee_stop_trace_show(struct ccci_modem *md, char *buf)
+{
+	int count;
+
+	count = snprintf(buf, 128, "%d\n", ee_stop_trace_en);
+	return count;
+}
+
+int get_ee_stop_tracing_en(void)
+{
+	return ee_stop_trace_en;
+}
+
 CCCI_MD_ATTR(NULL, dump, 0660, md_cd_dump_show, md_cd_dump_store);
 CCCI_MD_ATTR(NULL, control, 0660, md_cd_control_show, md_cd_control_store);
 CCCI_MD_ATTR(NULL, parameter, 0660, md_cd_parameter_show, md_cd_parameter_store);
+CCCI_MD_ATTR(NULL, ee_stop_trace, 0660, md_cd_ee_stop_trace_show, md_cd_ee_stop_trace_store);
 
 static void md_cd_sysfs_init(struct ccci_modem *md)
 {
@@ -3559,11 +3564,17 @@ static void md_cd_sysfs_init(struct ccci_modem *md)
 	ret = sysfs_create_file(&md->kobj, &ccci_md_attr_parameter.attr);
 	if (ret)
 		CCCI_ERROR_LOG(md->index, TAG, "fail to add sysfs node %s %d\n", ccci_md_attr_parameter.attr.name, ret);
-#ifdef FEATURE_GARBAGE_FILTER_SUPPORT
-	ccci_md_attr_filter.modem = md;
-	ret = sysfs_create_file(&md->kobj, &ccci_md_attr_filter.attr);
+
+	ccci_md_attr_ee_stop_trace.modem = md;
+	ret = sysfs_create_file(&md->kobj, &ccci_md_attr_ee_stop_trace.attr);
 	if (ret)
-		CCCI_ERROR_LOG(md->index, TAG, "fail to add sysfs node %s %d\n", ccci_md_attr_filter.attr.name, ret);
+		CCCI_ERROR_LOG(md->index, TAG, "fail to add sysfs node %s %d\n",
+				ccci_md_attr_ee_stop_trace.attr.name, ret);
+
+#ifdef CONFIG_MTK_ECCCI_STOP_TRACE
+	ee_stop_trace_en = 1;
+#else
+	ee_stop_trace_en = 0;
 #endif
 }
 

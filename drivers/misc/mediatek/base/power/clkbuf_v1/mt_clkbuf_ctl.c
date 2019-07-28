@@ -505,6 +505,7 @@ bool clk_buf_ctrl(enum clk_buf_id id, bool onoff)
 
 	return true;
 }
+EXPORT_SYMBOL(clk_buf_ctrl);
 
 void clk_buf_get_swctrl_status(CLK_BUF_SWCTRL_STATUS_T *status)
 {

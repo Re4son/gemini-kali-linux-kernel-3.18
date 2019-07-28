@@ -42,8 +42,10 @@ read_tbat_value(void)
 	return 30;
 }
 /* ************************************ */
+static int doing_tz_unregister;
 static kuid_t uid = KUIDT_INIT(0);
 static kgid_t gid = KGIDT_INIT(1000);
+static DEFINE_SEMAPHORE(sem_mutex);
 
 static unsigned int interval;	/* seconds, 0 : no auto polling */
 static int trip_temp[10] = { 120000, 110000, 100000, 90000, 80000, 70000, 65000, 60000, 55000, 50000 };
@@ -475,6 +477,7 @@ static ssize_t mtktsbattery_write(struct file *file, const char __user *buffer, 
 		&ptr_mtktsbattery_data->trip[8], &ptr_mtktsbattery_data->t_type[8], ptr_mtktsbattery_data->bind8,
 		&ptr_mtktsbattery_data->trip[9], &ptr_mtktsbattery_data->t_type[9], ptr_mtktsbattery_data->bind9,
 		&ptr_mtktsbattery_data->time_msec) == 32) {
+		down(&sem_mutex);
 		mtktsbattery_dprintk("[mtktsbattery_write] mtktsbattery_unregister_thermal\n");
 		mtktsbattery_unregister_thermal();
 
@@ -483,6 +486,7 @@ static ssize_t mtktsbattery_write(struct file *file, const char __user *buffer, 
 					"Bad argument");
 			mtktsbattery_dprintk("[mtktsbattery_write] bad argument\n");
 			kfree(ptr_mtktsbattery_data);
+			up(&sem_mutex);
 			return -EINVAL;
 		}
 
@@ -533,6 +537,7 @@ static ssize_t mtktsbattery_write(struct file *file, const char __user *buffer, 
 
 		mtktsbattery_dprintk("[mtktsbattery_write] mtktsbattery_register_thermal\n");
 		mtktsbattery_register_thermal();
+		up(&sem_mutex);
 
 		kfree(ptr_mtktsbattery_data);
 		/* battery_write_flag=1; */
@@ -554,7 +559,7 @@ void mtkts_battery_cancel_thermal_timer(void)
 	/* stop thermal framework polling when entering deep idle */
 	/* For charging current throttling during deep idle,
 	   this delayed work cannot be canceled.
-	if (thz_dev)
+	if (thz_dev && !doing_tz_unregister)
 		cancel_delayed_work(&(thz_dev->poll_queue));
 	*/
 	return;
@@ -566,7 +571,7 @@ void mtkts_battery_start_thermal_timer(void)
 	/* resume thermal framework polling when leaving deep idle */
 	/* For charging current throttling during deep idle,
 	   this delayed work cannot be canceled.
-	if (thz_dev != NULL && interval != 0)
+	if (thz_dev != NULL && interval != 0 && !doing_tz_unregister)
 		mod_delayed_work(system_freezable_wq, &(thz_dev->poll_queue), round_jiffies(msecs_to_jiffies(3000)));
 	*/
 	return;
@@ -604,8 +609,10 @@ static void mtktsbattery_unregister_thermal(void)
 	mtktsbattery_dprintk("[mtktsbattery_unregister_thermal]\n");
 
 	if (thz_dev) {
+		doing_tz_unregister = 1;
 		mtk_thermal_zone_device_unregister(thz_dev);
 		thz_dev = NULL;
+		doing_tz_unregister = 0;
 	}
 }
 

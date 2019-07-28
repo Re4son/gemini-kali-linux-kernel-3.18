@@ -211,7 +211,8 @@ static int get_eint_attr_val(int md_id, struct device_node *node, int index)
 		if (ret != 0) {
 			md_eint_struct[type].value_sim[index] = ERR_SIM_HOT_PLUG_QUERY_TYPE;
 			CCCI_NORMAL_LOG(md_id, RPC, "%s:  not found\n", md_eint_struct[type].property);
-			return ERR_SIM_HOT_PLUG_QUERY_TYPE;
+			ret = ERR_SIM_HOT_PLUG_QUERY_TYPE;
+			continue;
 		}
 		/* special case: polarity's position == sensitivity's start[ */
 		if (type == SIM_HOT_PLUG_EINT_POLARITY) {
@@ -240,7 +241,7 @@ static int get_eint_attr_val(int md_id, struct device_node *node, int index)
 		} else
 			md_eint_struct[type].value_sim[index] = value;
 	}
-	return 0;
+	return ret;
 }
 
 void get_dtsi_eint_node(int md_id)
@@ -289,7 +290,8 @@ int get_eint_attr_DTSVal(int md_id, char *name, unsigned int name_len,
 			CCCI_BOOTUP_LOG(md_id, RPC, "md_eint:%s, sizeof: %d, sim_info: %d, %d\n",
 					eint_node_prop.eint_value[type].property,
 					*len, *sim_info, eint_node_prop.eint_value[type].value_sim[i]);
-			return 0;
+			if (sim_value >= 0)
+				return 0;
 		}
 	}
 	return ERR_SIM_HOT_PLUG_QUERY_STRING;
@@ -476,13 +478,21 @@ static void ccci_rpc_work_helper(struct ccci_port *port, struct rpc_pkt *pkt,
 				CCCI_ERROR_LOG(md_id, RPC, "invalid ContentAdddr[0x%p] for RPC_SECURE_ALGO_OP!\n",
 					     (void *)ContentAddr);
 				tmp_data[0] = FS_PARAM_ERROR;
+				pkt_num = 0;
 				pkt[pkt_num].len = sizeof(unsigned int);
 				pkt[pkt_num++].buf = (void *)&tmp_data[0];
 				break;
 			}
 			ContentLen = *(unsigned int *)pkt[2].buf;
 			/* CustomSeed = *(sed_t*)pkt[3].buf; */
-			WARN_ON(sizeof(CustomSeed.sed) < pkt[3].len);
+			if (sizeof(CustomSeed.sed) < pkt[3].len) {
+				CCCI_ERROR_LOG(md_id, RPC, "invalid pkt_len %d for RPC_SECURE_ALGO_OP!\n", pkt[3].len);
+				tmp_data[0] = FS_PARAM_ERROR;
+				pkt_num = 0;
+				pkt[pkt_num].len = sizeof(unsigned int);
+				pkt[pkt_num++].buf = (void *)&tmp_data[0];
+				break;
+			}
 			memcpy(CustomSeed.sed, pkt[3].buf, pkt[3].len);
 
 #ifdef ENCRYPT_DEBUG
@@ -519,6 +529,7 @@ static void ccci_rpc_work_helper(struct ccci_port *port, struct rpc_pkt *pkt,
 			if (ResText == NULL) {
 				CCCI_ERROR_LOG(md_id, RPC, "Fail alloc Mem for RPC_SECURE_ALGO_OP!\n");
 				tmp_data[0] = FS_PARAM_ERROR;
+				pkt_num = 0;
 				pkt[pkt_num].len = sizeof(unsigned int);
 				pkt[pkt_num++].buf = (void *)&tmp_data[0];
 				break;
@@ -1167,7 +1178,7 @@ static void rpc_msg_handler(struct ccci_port *port, struct sk_buff *skb)
 {
 	int md_id = port->md_id;
 	struct rpc_buffer *rpc_buf = (struct rpc_buffer *)skb->data;
-	int i, data_len = 0, AlignLength, ret;
+	int i, data_len, AlignLength, ret;
 	struct rpc_pkt pkt[RPC_MAX_ARG_NUM];
 	char *ptr, *ptr_base;
 	/* unsigned int tmp_data[128]; */	/* size of tmp_data should be >= any RPC output result */
@@ -1178,6 +1189,10 @@ static void rpc_msg_handler(struct ccci_port *port, struct sk_buff *skb)
 		goto err_out;
 	}
 	/* sanity check */
+	if (skb->len > RPC_MAX_BUF_SIZE) {
+		CCCI_ERROR_LOG(md_id, RPC, "invalid RPC buffer size 0x%x/0x%x\n", skb->len, RPC_MAX_BUF_SIZE);
+		goto err_out;
+	}
 	if (rpc_buf->header.reserved < 0 || rpc_buf->header.reserved > RPC_REQ_BUFFER_NUM ||
 	    rpc_buf->para_num < 0 || rpc_buf->para_num > RPC_MAX_ARG_NUM) {
 		CCCI_ERROR_LOG(md_id, RPC, "invalid RPC index %d/%d\n", rpc_buf->header.reserved,
@@ -1186,11 +1201,23 @@ static void rpc_msg_handler(struct ccci_port *port, struct sk_buff *skb)
 	}
 	/* parse buffer */
 	ptr_base = ptr = rpc_buf->buffer;
+	data_len = sizeof(rpc_buf->op_id) + sizeof(rpc_buf->para_num);
 	for (i = 0; i < rpc_buf->para_num; i++) {
 		pkt[i].len = *((unsigned int *)ptr);
+		if (pkt[i].len >= skb->len) {
+			CCCI_ERROR_LOG(md_id, RPC, "invalid packet length in parse %u\n", pkt[i].len);
+			goto err_out;
+		}
+		if ((data_len + sizeof(pkt[i].len) + pkt[i].len) > RPC_MAX_BUF_SIZE) {
+			CCCI_ERROR_LOG(md_id, RPC, "RPC buffer overflow in parse %zu\n",
+					data_len + sizeof(pkt[i].len) + pkt[i].len);
+			goto err_out;
+		}
 		ptr += sizeof(pkt[i].len);
 		pkt[i].buf = ptr;
-		ptr += ((pkt[i].len + 3) >> 2) << 2;	/* 4byte align */
+		AlignLength = ((pkt[i].len + 3) >> 2) << 2;
+		ptr += AlignLength;	/* 4byte align */
+		data_len += (sizeof(pkt[i].len) + AlignLength);
 	}
 	if ((ptr - ptr_base) > RPC_MAX_BUF_SIZE) {
 		CCCI_ERROR_LOG(md_id, RPC, "RPC overflow in parse 0x%p\n", (void *)(ptr - ptr_base));
@@ -1201,7 +1228,7 @@ static void rpc_msg_handler(struct ccci_port *port, struct sk_buff *skb)
 	/* write back to modem */
 	/* update message */
 	rpc_buf->op_id |= RPC_API_RESP_ID;
-	data_len += (sizeof(rpc_buf->op_id) + sizeof(rpc_buf->para_num));
+	data_len = (sizeof(rpc_buf->op_id) + sizeof(rpc_buf->para_num));
 	ptr = rpc_buf->buffer;
 	for (i = 0; i < rpc_buf->para_num; i++) {
 		if ((data_len + sizeof(pkt[i].len) + pkt[i].len) > RPC_MAX_BUF_SIZE) {
@@ -1301,9 +1328,46 @@ int port_rpc_recv_match(struct ccci_port *port, struct sk_buff *skb)
 	return 0;
 }
 
+void port_rpc_md_state_notice(struct ccci_port *port, MD_STATE state)
+{
+	struct sk_buff *skb = NULL;
+	int clear_cnt = 0;
+
+	if (port->md_id != MD_SYS1)
+		return;
+
+	switch (state) {
+	case GATED:
+		CCCI_DEBUG_LOG(port->md_id, CHAR, "port rpc notice stop\n");
+		if (port->private_data != NULL) {
+			kthread_stop(port->private_data);
+			CCCI_DEBUG_LOG(port->md_id, CHAR, "port rpc notice clear list\n");
+			/* clear queue list */
+			while ((skb = __skb_dequeue(&port->rx_skb_list)) != NULL) {
+				ccci_free_skb(skb);
+				clear_cnt++;
+			}
+			port->rx_drop_cnt += clear_cnt;
+			CCCI_NORMAL_LOG(port->md_id, CHAR,
+				"port rpc notice: port %s state notice rx_len=%d empty=%d, clear_cnt=%d, drop=%d\n",
+				port->name, port->rx_skb_list.qlen, skb_queue_empty(&port->rx_skb_list),
+				clear_cnt, port->rx_drop_cnt);
+			ccci_event_log("md%d: port %s close rx_len=%d empty=%d, clear_cnt=%d, drop=%d\n",
+				port->md_id, port->name, port->rx_skb_list.qlen,
+				skb_queue_empty(&port->rx_skb_list), clear_cnt, port->rx_drop_cnt);
+			port->private_data = kthread_run(port_kthread_handler, port, "%s", port->name);
+			CCCI_NOTICE_LOG(port->md_id, CHAR, "port rpc notice end\n");
+		}
+		break;
+	default:
+		break;
+	};
+}
+
 struct ccci_port_ops rpc_port_ops = {
 	.init = &port_rpc_init,
 	.recv_match = &port_rpc_recv_match,
 	.recv_skb = &port_recv_skb,
+	.md_state_notice = &port_rpc_md_state_notice,
 };
 

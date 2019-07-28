@@ -102,7 +102,6 @@ unsigned int hps_get_hvytsk(unsigned int cluster_id)
 	else
 		return hps_sys.cluster_info[cluster_id].hvyTsk_value;
 }
-
 unsigned int hps_get_per_cpu_load(int cpu, int isReset)
 {
 	unsigned int ret;
@@ -139,12 +138,10 @@ static void hps_get_sysinfo(void)
 	for_each_possible_cpu(cpu) {
 		per_cpu(hps_percpu_ctxt, cpu).load = hps_cpu_get_percpu_load(cpu);
 		hps_ctxt.cur_loads += per_cpu(hps_percpu_ctxt, cpu).load;
-
 		spin_lock(&load_info_lock);
 		hps_cpu_load_info[cpu] +=  per_cpu(hps_percpu_ctxt, cpu).load;
 		hps_load_cnt[cpu]++;
 		spin_unlock(&load_info_lock);
-
 		if (hps_ctxt.cur_dump_enabled) {
 			if (cpu_online(cpu))
 				i = sprintf(str1_ptr, "%4u", 1);

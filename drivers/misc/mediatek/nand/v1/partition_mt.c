@@ -447,8 +447,9 @@ void construct_mtd_partition(struct mtd_info *mtd)
 	int i, j;
 
 	for (i = 0; i < PART_MAX_COUNT; i++) {
-		if (!strcmp(lastest_part[i-1].name, "BMTPOOL"))
-			break;
+		if (i != 0)
+			if (!strcmp(lastest_part[i-1].name, "BMTPOOL"))
+				break;
 		for (j = 0; j < MAX_PARTITION_NAME_LEN; j++) {
 			if (lastest_part[i].name[j] == 0)
 				break;

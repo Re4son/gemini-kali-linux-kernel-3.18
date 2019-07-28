@@ -129,12 +129,27 @@ static void gic_enable_redist(void)
 	val &= ~GICR_WAKER_ProcessorSleep;
 	writel_relaxed(val, rbase + GICR_WAKER);
 
+/* FIXME: use original algo or not? */
+#if 1
 	while (readl_relaxed(rbase + GICR_WAKER) & GICR_WAKER_ChildrenAsleep) {
 		count--;
 		if (!count) {
 			pr_err_ratelimited("redist didn't wake up...\n");
 			return;
 		}
+#endif
+#if 0
+	if (!enable) {		/* Check that GICR_WAKER is writeable */
+		val = readl_relaxed(rbase + GICR_WAKER);
+		if (!(val & GICR_WAKER_ProcessorSleep))
+			return;	/* No PM support in this redistributor */
+	}
+
+	while (--count) {
+		val = readl_relaxed(rbase + GICR_WAKER);
+		if (enable ^ (val & GICR_WAKER_ChildrenAsleep))
+			break;
+#endif
 		cpu_relax();
 		udelay(1);
 	};
@@ -511,9 +526,13 @@ static int gic_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
 	int enabled;
 	u64 val;
 
-#ifndef CONFIG_MTK_IRQ_NEW_DESIGN
+	if (cpu >= nr_cpu_ids)
+		return -EINVAL;
+
 	if (gic_irq_in_rdist(d))
 		return -EINVAL;
+
+#ifndef CONFIG_MTK_IRQ_NEW_DESIGN
 
 	/* If interrupt was enabled, disable it first */
 	enabled = gic_peek_irq(d, GICD_ISENABLER);

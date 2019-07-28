@@ -36,7 +36,7 @@
 /* Thermal Register Definition */
 
 /* EEM Structure */
-typedef struct {
+struct PTP_INIT_T {
 	unsigned int ADC_CALI_EN;
 	unsigned int PTPINITEN;
 	unsigned int PTPMONEN;
@@ -74,7 +74,7 @@ typedef struct {
 
 	unsigned int DCVOFFSETIN;
 	unsigned int AGEVOFFSETIN;
-} PTP_INIT_T;
+};
 
 
 enum eem_ctrl_id {

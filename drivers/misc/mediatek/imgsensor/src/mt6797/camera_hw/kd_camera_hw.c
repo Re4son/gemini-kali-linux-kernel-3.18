@@ -29,7 +29,7 @@
 #include "kd_camera_hw.h"
 /******************************************************************************
  * Debug configuration
-******************************************************************************/
+ ******************************************************************************/
 #define PFX "[kd_camera_hw]"
 
 //#define DEBUG_CAMERA_HW_K
@@ -128,6 +128,22 @@ PowerCust PowerCustList = {
 
 PowerUp PowerOnList = {
 	{
+#if defined(IMX398_MIPI_RAW)
+	{
+		SENSOR_DRVNAME_IMX398_MIPI_RAW,
+		{
+			{SensorMCLK, Vol_High, 0},
+			{AVDD, Vol_2800, 0},
+			{DOVDD, Vol_1800, 0},
+			{DVDD, Vol_1100, 0},
+			{AFVDD, Vol_2800, 0},
+			{PDN, Vol_Low, 0},
+			{PDN, Vol_High, 0},
+			{RST, Vol_Low, 0},
+			{RST, Vol_High, 1},
+		},
+	},
+#endif
 #if defined(OV23850_MIPI_RAW)
 	 {SENSOR_DRVNAME_OV23850_MIPI_RAW,
 	  {
@@ -142,6 +158,22 @@ PowerUp PowerOnList = {
 	   {RST, Vol_High, 5},
 	   },
 	  },
+#endif
+#if defined(IMX386_MIPI_RAW)
+	{
+		SENSOR_DRVNAME_IMX386_MIPI_RAW,
+		{
+			{SensorMCLK, Vol_High, 0},
+			{AVDD, Vol_2800, 0},
+			{DOVDD, Vol_1800, 0},
+			{DVDD, Vol_1100, 0},
+			{AFVDD, Vol_2800, 0},
+			{PDN, Vol_Low, 0},
+			{PDN, Vol_High, 0},
+			{RST, Vol_Low, 0},
+			{RST, Vol_High, 1},
+		},
+	},
 #endif
 #if defined(S5K3M2_MIPI_RAW)
 	  {SENSOR_DRVNAME_S5K3M2_MIPI_RAW,
@@ -158,6 +190,308 @@ PowerUp PowerOnList = {
 	   },
 	  },
 #endif
+#if defined(S5K3P3SX_MIPI_RAW)
+	  {SENSOR_DRVNAME_S5K3P3SX_MIPI_RAW,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {DOVDD, Vol_1800, 0},
+	   {AVDD, Vol_2800, 0},
+	   {DVDD, Vol_1200, 0},
+	   {AFVDD, Vol_2800, 5},
+	   {PDN, Vol_Low, 4},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_Low, 1},
+	   {RST, Vol_High, 0},
+	   },
+	  },
+#endif
+#if defined(S5K5E2YA_MIPI_RAW)
+	 {SENSOR_DRVNAME_S5K5E2YA_MIPI_RAW,
+	  {
+	   {PDN, Vol_Low, 0},
+	   {RST, Vol_Low, 1},
+	   {SensorMCLK, Vol_High, 3},
+	   {DVDD, Vol_1200, 1},
+	   {DOVDD, Vol_1800, 1},
+	   {AVDD, Vol_2800, 1},
+	   {AFVDD, Vol_2800, 0},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_High, 5},
+	   },
+	  },
+#endif
+#if defined(S5K4ECGX_MIPI_YUV)
+	 {SENSOR_DRVNAME_S5K4ECGX_MIPI_YUV,
+	  {
+	   {DVDD, Vol_1200, 1},
+	   {AVDD, Vol_2800, 1},
+	   {DOVDD, Vol_1800, 1},
+	   {AFVDD, Vol_2800, 0},
+	   {SensorMCLK, Vol_High, 0},
+	   {PDN, Vol_Low, 1},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_Low, 1},
+	   {RST, Vol_High, 0},
+	   },
+	  },
+#endif
+#if defined(OV16880_MIPI_RAW)
+	  {SENSOR_DRVNAME_OV16880_MIPI_RAW,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {PDN, Vol_Low, 0},
+	   {RST, Vol_Low, 0},
+	   {DOVDD, Vol_1800, 1},
+	   {AVDD, Vol_2800, 1},
+	   {DVDD, Vol_1200, 5},
+	   {AFVDD, Vol_2800, 1},
+	   {PDN, Vol_High, 1},
+	   {RST, Vol_High, 2}
+	   },
+	  },
+#endif
+#if defined(S5K2P8_MIPI_RAW)
+	  {SENSOR_DRVNAME_S5K2P8_MIPI_RAW,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {DOVDD, Vol_1800, 0},
+	   {AVDD, Vol_2800, 0},
+	   {DVDD, Vol_1200, 0},
+	   {AFVDD, Vol_2800, 5},
+	   {PDN, Vol_Low, 4},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_Low, 1},
+	   {RST, Vol_High, 0},
+	   },
+	  },
+#endif
+#if defined(IMX258_MIPI_RAW)
+	  {SENSOR_DRVNAME_IMX258_MIPI_RAW,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {PDN, Vol_Low, 0},
+	   {RST, Vol_Low, 0},
+	   {DOVDD, Vol_1800, 0},
+	   {AVDD, Vol_2800, 0},
+	   {DVDD, Vol_1200, 0},
+	   {AFVDD, Vol_2800, 1},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_High, 0}
+	   },
+	  },
+#endif
+#if defined(IMX377_MIPI_RAW)
+	  {SENSOR_DRVNAME_IMX377_MIPI_RAW,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {PDN, Vol_Low, 0},
+	   {RST, Vol_Low, 0},
+	   {DOVDD, Vol_1800, 0},
+	   {AVDD, Vol_2800, 0},
+	   {DVDD, Vol_1200, 0},
+	   {AFVDD, Vol_2800, 1},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_High, 0}
+	   },
+	  },
+#endif
+#if defined(S5K2X8_MIPI_RAW)
+	  {SENSOR_DRVNAME_S5K2X8_MIPI_RAW,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {PDN, Vol_Low, 0},
+	   {RST, Vol_Low, 0},
+	   {DOVDD, Vol_1800, 0},
+	   {AVDD, Vol_2800, 0},
+	   {DVDD, Vol_1200, 0},
+	   {AFVDD, Vol_2800, 1},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_High, 0}
+	   },
+	  },
+#endif
+#if defined(IMX214_MIPI_RAW)
+	  {SENSOR_DRVNAME_IMX214_MIPI_RAW,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {AVDD, Vol_2800, 0},
+	   {DOVDD, Vol_1800, 0},
+	   {DVDD, Vol_1000, 0},
+	   {AFVDD, Vol_2800, 1},
+	   {PDN, Vol_Low, 0},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_Low, 0},
+	   {RST, Vol_High, 1}
+	   },
+	  },
+#endif
+#if defined(IMX214_MIPI_MONO)
+	  {SENSOR_DRVNAME_IMX214_MIPI_MONO,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {AVDD, Vol_2800, 0},
+	   {DOVDD, Vol_1800, 0},
+	   {DVDD, Vol_1000, 0},
+	   {AFVDD, Vol_2800, 1},
+	   {PDN, Vol_Low, 0},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_Low, 0},
+	   {RST, Vol_High, 1}
+	   },
+	  },
+#endif
+#if defined(IMX230_MIPI_RAW)
+	  {SENSOR_DRVNAME_IMX230_MIPI_RAW,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {AVDD, Vol_2800, 10},
+	   {DOVDD, Vol_1800, 10},
+	   {DVDD, Vol_1200, 10},
+	   {AFVDD, Vol_2800, 5},
+	   {PDN, Vol_Low, 0},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_Low, 0},
+	   {RST, Vol_High, 0}
+	   },
+	  },
+#endif
+#if defined(S5K3L8_MIPI_RAW)
+	  {SENSOR_DRVNAME_S5K3L8_MIPI_RAW,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {PDN, Vol_Low, 0},
+	   {RST, Vol_Low, 0},
+	   {DOVDD, Vol_1800, 0},
+	   {AVDD, Vol_2800, 0},
+	   {DVDD, Vol_1200, 0},
+	   {AFVDD, Vol_2800, 1},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_High, 0}
+	   },
+	  },
+#endif
+#if defined(IMX362_MIPI_RAW)
+	  {SENSOR_DRVNAME_IMX362_MIPI_RAW,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {AVDD, Vol_2800, 10},
+	   {DOVDD, Vol_1800, 10},
+	   {DVDD, Vol_1200, 10},
+	   {AFVDD, Vol_2800, 5},
+	   {PDN, Vol_Low, 0},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_Low, 0},
+	   {RST, Vol_High, 0}
+	   },
+	  },
+#endif
+#if defined(S5K2L7_MIPI_RAW)
+	  {SENSOR_DRVNAME_S5K2L7_MIPI_RAW,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {PDN, Vol_Low, 0},
+	   {RST, Vol_Low, 0},
+	   {DOVDD, Vol_1800, 0},
+	   {AVDD, Vol_2800, 0},
+	   {DVDD, Vol_1200, 0},
+	   {AFVDD, Vol_2800, 3},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_High, 5}
+	   },
+	  },
+#endif
+#if defined(IMX318_MIPI_RAW)
+	  {SENSOR_DRVNAME_IMX318_MIPI_RAW,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {AVDD, Vol_2800, 10},
+	   {DOVDD, Vol_1800, 10},
+	   {DVDD, Vol_1200, 10},
+	   {AFVDD, Vol_2800, 5},
+	   {PDN, Vol_Low, 0},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_Low, 0},
+	   {RST, Vol_High, 0}
+	   },
+	  },
+#endif
+#if defined(OV8865_MIPI_RAW)
+	  {SENSOR_DRVNAME_OV8865_MIPI_RAW,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {PDN, Vol_Low, 5},
+	   {RST, Vol_Low, 5},
+	   {DOVDD, Vol_1800, 5},
+	   {AVDD, Vol_2800, 5},
+	   {DVDD, Vol_1200, 5},
+	   {AFVDD, Vol_2800, 5},
+	   {PDN, Vol_High, 5},
+	   {RST, Vol_High, 5}
+	   },
+	  },
+#endif
+#if defined(IMX219_MIPI_RAW)
+	  {SENSOR_DRVNAME_IMX219_MIPI_RAW,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {AVDD, Vol_2800, 10},
+	   {DOVDD, Vol_1800, 10},
+	   {DVDD, Vol_1000, 10},
+	   {AFVDD, Vol_2800, 5},
+	   {PDN, Vol_Low, 0},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_Low, 0},
+	   {RST, Vol_High, 0}
+	   },
+	  },
+#endif
+#if defined(S5K3M3_MIPI_RAW)
+	  {SENSOR_DRVNAME_S5K3M3_MIPI_RAW,
+	  {
+	   {SensorMCLK, Vol_High, 0},
+	   {PDN, Vol_Low, 0},
+	   {RST, Vol_Low, 0},
+	   {DOVDD, Vol_1800, 0},
+	   {AVDD, Vol_2800, 0},
+	   {DVDD, Vol_1000, 0},
+	   {AFVDD, Vol_2800, 1},
+	   {PDN, Vol_High, 0},
+	   {RST, Vol_High, 2}
+	   },
+	  },
+#endif	  
+#if defined(OV5670_MIPI_RAW)
+	   {SENSOR_DRVNAME_OV5670_MIPI_RAW,
+	   {
+		{SensorMCLK, Vol_High, 0},
+		{PDN, Vol_Low, 5},
+		{RST, Vol_Low, 5},
+		{DOVDD, Vol_1800, 5},
+		{AVDD, Vol_2800, 5},
+		{DVDD, Vol_1200, 5},
+		{AFVDD, Vol_2800, 5},
+		{PDN, Vol_High, 5},
+		{RST, Vol_High, 5}
+		},
+	   },
+#endif
+#if defined(OV5670_MIPI_RAW_2)
+			{SENSOR_DRVNAME_OV5670_MIPI_RAW_2,
+			{
+			 {SensorMCLK, Vol_High, 0},
+			 {PDN, Vol_Low, 5},
+			 {RST, Vol_Low, 5},
+			 {DOVDD, Vol_1800, 5},
+			 {AVDD, Vol_2800, 5},
+			 {DVDD, Vol_1200, 5},
+			 {AFVDD, Vol_2800, 5},
+			 {PDN, Vol_High, 5},
+			 {RST, Vol_High, 5}
+			 },
+			},
+#endif
+
+/* Add by chunjian.zheng,2018.09.06 */
 #if defined(SP5506_MIPI_RAW)
    {SENSOR_DRVNAME_OV5675_MIPI_RAW,
     {
@@ -204,6 +538,7 @@ PowerUp PowerOnList = {
     },
    },
 #endif
+
 #if defined(SP5509_MAIN_MIPI_RAW)
 		{SENSOR_DRVNAME_SP5509_MAIN_MIPI_RAW,
 		 {
@@ -806,7 +1141,6 @@ BOOL hwpowerdown(PowerInformation pwInfo, char *mode_name)
 	return TRUE;
 }
 
-//单摄像头CCT连接不上
 //#define SINGLE_CAMERA_FOR_CCT
 int mainsubcam_flag=0;
 int kdCISModulePowerOn(CAMERA_DUAL_CAMERA_SENSOR_ENUM SensorIdx, char *currSensorName, BOOL On,

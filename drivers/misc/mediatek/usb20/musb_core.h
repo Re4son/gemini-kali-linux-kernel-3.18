@@ -100,7 +100,6 @@ extern int kernel_init_done;
 extern int musb_force_on;
 extern int musb_host_dynamic_fifo;
 extern int musb_host_dynamic_fifo_usage_msk;
-extern unsigned musb_uart_debug;
 extern struct musb *mtk_musb;
 extern bool mtk_usb_power;
 extern int ep_config_from_table_for_host(struct musb *musb);
@@ -676,4 +675,5 @@ static inline const char *otg_state_string(enum usb_otg_state state)
 }
 #endif
 
+extern void register_usb_hal_disconnect_check(void (*function)(void));
 #endif				/* __MUSB_CORE_H__ */

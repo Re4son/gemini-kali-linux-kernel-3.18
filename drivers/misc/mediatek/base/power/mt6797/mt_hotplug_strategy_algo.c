@@ -238,8 +238,12 @@ static int hps_algo_do_cluster_action(unsigned int cluster_id)
 			if (hps_algo_check_criteria() == 1)
 				return 1;
 			if (!cpu_online(cpu)) {	/* For CPU offline */
-				if (cpu_up(cpu))
-					hps_warn("[Info]CPU %d ++!\n", cpu);
+				if (cpu % 4 == 0)
+					hps_cpu_up(cpu);
+				else {
+					if (cpu_up(cpu))
+						hps_warn("[Info]CPU %d ++!\n", cpu);
+				}
 				++online_cores;
 			}
 			if (target_cores == online_cores)
@@ -253,8 +257,12 @@ static int hps_algo_do_cluster_action(unsigned int cluster_id)
 			if (hps_algo_check_criteria() == 1)
 				return 1;
 			if (cpu_online(cpu)) {
-				if (cpu_down(cpu))
-					hps_warn("[Info]CPU %d --!\n", cpu);
+				if (cpu % 4 == 0)
+					hps_cpu_down(cpu);
+				else {
+					if (cpu_down(cpu))
+						hps_warn("[Info]CPU %d --!\n", cpu);
+				}
 				--online_cores;
 			}
 			if (target_cores == online_cores)
@@ -273,7 +281,7 @@ unsigned int hps_get_cluster_cpus(unsigned int cluster_id)
 	return cpumask_weight(&cpus);
 }
 
-void hps_check_base_limit(struct hps_sys_struct *hps_sys)
+void hps_check_base_limit(struct hps_sys_t *hps_sys)
 {
 	int i;
 
@@ -289,7 +297,7 @@ void hps_check_base_limit(struct hps_sys_struct *hps_sys)
 	mutex_unlock(&hps_ctxt.para_lock);
 }
 
-int hps_cal_core_num(struct hps_sys_struct *hps_sys, int core_val, int base_val)
+int hps_cal_core_num(struct hps_sys_t *hps_sys, int core_val, int base_val)
 {
 	int i, cpu, root_cluster;
 
@@ -331,7 +339,7 @@ out:				/* Add base value of per-cluster by default */
 	return 0;
 }
 
-void hps_define_root_cluster(struct hps_sys_struct *hps_sys)
+void hps_define_root_cluster(struct hps_sys_t *hps_sys)
 {
 	int i;
 
@@ -522,6 +530,7 @@ void hps_algo_main(void)
 HPS_END:
 	if (action_print || hrtbt_dbg) {
 		int online, target, ref_limit, ref_base, criteria_limit, criteria_base, hvytsk;
+
 		if (0 == get_efuse_status())
 			hps_sys.action_id |= (0x1 << 12);
 		mutex_lock(&hps_ctxt.para_lock);
@@ -581,8 +590,9 @@ HPS_END:
 				     hps_sys.down_load_avg, hps_sys.tlp_avg, hps_sys.rush_cnt,
 				     str_target);
 			else {
+			/*
 				hps_warn
-				    ("(0x%X)%s action-end (%u)(%u)(%u) %s %s%s (%u)(%u)(%u)(%u) %s\n",
+				    ("(0x%X)%s action end (%u)(%u)(%u) %s %s%s (%u)(%u)(%u)(%u) %s\n",
 				     ((hps_ctxt.hps_func_control << 12) | hps_sys.action_id),
 				     str_online, hps_ctxt.cur_loads,
 				     hps_ctxt.cur_tlp, hps_ctxt.cur_iowait, str_hvytsk,
@@ -593,7 +603,7 @@ HPS_END:
 						 hps_ctxt.cur_tlp, hps_ctxt.cur_iowait, str_hvytsk,
 						 str_criteria_limit, str_criteria_base,
 						 hps_sys.up_load_avg, hps_sys.down_load_avg,
-						 hps_sys.tlp_avg, hps_sys.rush_cnt, str_target);
+						 hps_sys.tlp_avg, hps_sys.rush_cnt, str_target);*/
 			}
 			hps_ctxt_reset_stas_nolock();
 		}

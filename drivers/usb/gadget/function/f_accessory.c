@@ -77,9 +77,13 @@ struct acc_dev {
 	struct usb_ep *ep_in;
 	struct usb_ep *ep_out;
 
-	/* set to 1 when we connect */
+	/* online indicates state of function_set_alt & function_unbind
+	 * set to 1 when we connect
+	 */
 	int online:1;
-	/* Set to 1 when we disconnect.
+
+	/* disconnected indicates state of open & release
+	 * Set to 1 when we disconnect.
 	 * Not cleared until our file is closed.
 	 */
 	int disconnected:1;
@@ -266,7 +270,6 @@ static struct usb_request *req_get(struct acc_dev *dev, struct list_head *head)
 
 static void acc_set_disconnected(struct acc_dev *dev)
 {
-	dev->online = 0;
 	dev->disconnected = 1;
 }
 
@@ -535,15 +538,6 @@ static int create_bulk_endpoints(struct acc_dev *dev,
 	ep->driver_data = dev;		/* claim the endpoint */
 	dev->ep_out = ep;
 
-	ep = usb_ep_autoconfig(cdev->gadget, out_desc);
-	if (!ep) {
-		DBG(cdev, "usb_ep_autoconfig for ep_out failed\n");
-		return -ENODEV;
-	}
-	DBG(cdev, "usb_ep_autoconfig for ep_out got %s\n", ep->name);
-	ep->driver_data = dev;		/* claim the endpoint */
-	dev->ep_out = ep;
-
 	/* now allocate requests for our endpoints */
 	for (i = 0; i < TX_REQ_MAX; i++) {
 		req = acc_request_new(dev->ep_in, BULK_BUFFER_SIZE);
@@ -577,6 +571,7 @@ static ssize_t acc_read(struct file *fp, char __user *buf,
 	struct acc_dev *dev = fp->private_data;
 	struct usb_request *req;
 	ssize_t r = count;
+	ssize_t data_length;
 	unsigned xfer;
 	int ret = 0;
 
@@ -590,6 +585,7 @@ static ssize_t acc_read(struct file *fp, char __user *buf,
 	if (count > BULK_BUFFER_SIZE)
 		count = BULK_BUFFER_SIZE;
 
+
 	/* we will block until we're online */
 	pr_debug("acc_read: waiting for online\n");
 	ret = wait_event_interruptible(dev->read_wq, dev->online);
@@ -597,6 +593,10 @@ static ssize_t acc_read(struct file *fp, char __user *buf,
 		r = ret;
 		goto done;
 	}
+
+	data_length = count;
+	data_length += dev->ep_out->maxpacket - 1;
+	data_length -= data_length % dev->ep_out->maxpacket;
 
 	if (dev->rx_done) {
 		// last req cancelled. try to get it.
@@ -607,7 +607,7 @@ static ssize_t acc_read(struct file *fp, char __user *buf,
 requeue_req:
 	/* queue a request */
 	req = dev->rx_req[0];
-	req->length = count;
+	req->length = data_length;
 	dev->rx_done = 0;
 	ret = usb_ep_queue(dev->ep_out, req, GFP_KERNEL);
 	if (ret < 0) {
@@ -639,6 +639,7 @@ copy_data:
 
 		pr_debug("rx %p %u\n", req, req->actual);
 		xfer = (req->actual < count) ? req->actual : count;
+
 		r = xfer;
 		if (copy_to_user(buf, req->buf, xfer))
 			r = -EFAULT;
@@ -657,6 +658,7 @@ static ssize_t acc_write(struct file *fp, const char __user *buf,
 	struct usb_request *req = 0;
 	ssize_t r = count;
 	unsigned xfer;
+	int sendZLP = 0;
 	int ret;
 
 	pr_debug("acc_write(%zu)\n", count);
@@ -666,7 +668,17 @@ static ssize_t acc_write(struct file *fp, const char __user *buf,
 		return -ENODEV;
 	}
 
-	while (count > 0) {
+	/* we need to send a zero length packet to signal the end of transfer
+	 * if the transfer size is aligned to a packet boundary.
+	 */
+	if ((count & (dev->ep_in->maxpacket - 1)) == 0)
+		sendZLP = 1;
+
+	while (count > 0 || sendZLP) {
+		/* so we exit after sending ZLP */
+		if (count == 0)
+			sendZLP = 0;
+
 		if (!dev->online) {
 			pr_debug("acc_write dev->error\n");
 			r = -EIO;
@@ -682,17 +694,11 @@ static ssize_t acc_write(struct file *fp, const char __user *buf,
 			break;
 		}
 
-		if (count > BULK_BUFFER_SIZE) {
+		if (count > BULK_BUFFER_SIZE)
 			xfer = BULK_BUFFER_SIZE;
-			/* ZLP, They will be more TX requests so not yet. */
-			req->zero = 0;
-		} else {
+		else
 			xfer = count;
-			/* If the data length is a multple of the
-			 * maxpacket size then send a zero length packet(ZLP).
-			*/
-			req->zero = ((xfer % dev->ep_in->maxpacket) == 0);
-		}
+
 		if (copy_from_user(req->buf, buf, xfer)) {
 			r = -EFAULT;
 			break;
@@ -775,7 +781,10 @@ static int acc_release(struct inode *ip, struct file *fp)
 	printk(KERN_INFO "acc_release\n");
 
 	WARN_ON(!atomic_xchg(&_acc_dev->open_excl, 0));
-	_acc_dev->disconnected = 0;
+	/* indicate that we are disconnected
+	 * still could be online so don't touch online flag
+	 */
+	_acc_dev->disconnected = 1;
 	return 0;
 }
 
@@ -820,6 +829,14 @@ static struct hid_driver acc_hid_driver = {
 	.probe = acc_hid_probe,
 };
 
+static void acc_complete_setup_noop(struct usb_ep *ep, struct usb_request *req)
+{
+	/*
+	 * Default no-op function when nothing needs to be done for the
+	 * setup request
+	 */
+}
+
 int acc_ctrlrequest(struct usb_composite_dev *cdev,
 				const struct usb_ctrlrequest *ctrl)
 {
@@ -847,6 +864,7 @@ int acc_ctrlrequest(struct usb_composite_dev *cdev,
 			schedule_delayed_work(
 				&dev->start_work, msecs_to_jiffies(10));
 			value = 0;
+			cdev->req->complete = acc_complete_setup_noop;
 		} else if (b_request == ACCESSORY_SEND_STRING) {
 			dev->string_index = w_index;
 			cdev->gadget->ep0->driver_data = dev;
@@ -855,10 +873,13 @@ int acc_ctrlrequest(struct usb_composite_dev *cdev,
 		} else if (b_request == ACCESSORY_SET_AUDIO_MODE &&
 				w_index == 0 && w_length == 0) {
 			dev->audio_mode = w_value;
+			cdev->req->complete = acc_complete_setup_noop;
 			value = 0;
 		} else if (b_request == ACCESSORY_REGISTER_HID) {
+			cdev->req->complete = acc_complete_setup_noop;
 			value = acc_register_hid(dev, w_value, w_index);
 		} else if (b_request == ACCESSORY_UNREGISTER_HID) {
+			cdev->req->complete = acc_complete_setup_noop;
 			value = acc_unregister_hid(dev, w_value);
 		} else if (b_request == ACCESSORY_SET_HID_REPORT_DESC) {
 			spin_lock_irqsave(&dev->lock, flags);
@@ -893,7 +914,7 @@ int acc_ctrlrequest(struct usb_composite_dev *cdev,
 		if (b_request == ACCESSORY_GET_PROTOCOL) {
 			*((u16 *)cdev->req->buf) = PROTOCOL_VERSION;
 			value = sizeof(u16);
-
+			cdev->req->complete = acc_complete_setup_noop;
 			/* clear any string left over from a previous session */
 			memset(dev->manufacturer, 0, sizeof(dev->manufacturer));
 			memset(dev->model, 0, sizeof(dev->model));
@@ -947,6 +968,7 @@ __acc_function_bind(struct usb_configuration *c,
 		}
 		dev->cdev = c->cdev;
 	}
+
 	ret = hid_register_driver(&acc_hid_driver);
 	if (ret)
 		return ret;
@@ -1030,6 +1052,10 @@ acc_function_unbind(struct usb_configuration *c, struct usb_function *f)
 	struct acc_dev	*dev = func_to_dev(f);
 	struct usb_request *req;
 	int i;
+
+	dev->online = 0;		/* clear online flag */
+	wake_up(&dev->read_wq);		/* unblock reads on closure */
+	wake_up(&dev->write_wq);	/* likewise for writes */
 
 	while ((req = req_get(dev, &dev->tx_idle)))
 		acc_request_free(req, dev->ep_in);
@@ -1161,6 +1187,7 @@ static int acc_function_set_alt(struct usb_function *f,
 	}
 
 	dev->online = 1;
+	dev->disconnected = 0; /* if online then not disconnected */
 
 	/* readers may be blocked waiting for us to go online */
 	wake_up(&dev->read_wq);
@@ -1173,7 +1200,8 @@ static void acc_function_disable(struct usb_function *f)
 	struct usb_composite_dev	*cdev = dev->cdev;
 
 	DBG(cdev, "acc_function_disable\n");
-	acc_set_disconnected(dev);
+	acc_set_disconnected(dev); /* this now only sets disconnected */
+	dev->online = 0; /* so now need to clear online flag here too */
 	usb_ep_disable(dev->ep_in);
 	usb_ep_disable(dev->ep_out);
 
@@ -1188,7 +1216,7 @@ static int acc_bind_config(struct usb_configuration *c)
 	struct acc_dev *dev = _acc_dev;
 	int ret;
 
-	printk(KERN_INFO "acc_bind_config\n");
+	pr_info("acc_bind_config\n");
 
 	/* allocate a string ID for our interface */
 	if (acc_string_defs[INTERFACE_STRING_INDEX].id == 0) {

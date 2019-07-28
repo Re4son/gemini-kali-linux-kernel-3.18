@@ -43,6 +43,7 @@
 #include <mt_ocp.h>
 #include <mt6797/mt_wdt.h>
 #include <ext_wd_drv.h>
+#include <asm/io.h>
 #endif
 
 #ifdef MTK_IRQ_NEW_DESIGN
@@ -389,6 +390,7 @@ static int __init psci_0_2_init(struct device_node *np)
 
 	pr_info("Using standard PSCI v0.2 function IDs\n");
 	psci_ops.get_version = psci_get_version;
+
 	psci_function_id[PSCI_FN_CPU_SUSPEND] = PSCI_0_2_FN64_CPU_SUSPEND;
 	psci_ops.cpu_suspend = psci_cpu_suspend;
 
@@ -482,8 +484,6 @@ int __init psci_init(void)
 	init_fn = (psci_initcall_t)matched_np->data;
 	return init_fn(np);
 }
-
-#ifdef CONFIG_SMP
 
 static int __init cpu_psci_cpu_init(struct device_node *dn, unsigned int cpu)
 {
@@ -894,7 +894,6 @@ static int cpu_psci_cpu_kill(unsigned int cpu)
 	return 0;
 }
 #endif
-#endif
 
 static int psci_suspend_finisher(unsigned long index)
 {
@@ -944,7 +943,6 @@ const struct cpu_operations cpu_psci_ops = {
 	.cpu_init_idle	= cpu_psci_cpu_init_idle,
 	.cpu_suspend	= cpu_psci_cpu_suspend,
 #endif
-#ifdef CONFIG_SMP
 	.cpu_init	= cpu_psci_cpu_init,
 	.cpu_prepare	= cpu_psci_cpu_prepare,
 	.cpu_boot	= cpu_psci_cpu_boot,
@@ -952,7 +950,6 @@ const struct cpu_operations cpu_psci_ops = {
 	.cpu_disable	= cpu_psci_cpu_disable,
 	.cpu_die	= cpu_psci_cpu_die,
 	.cpu_kill	= cpu_psci_cpu_kill,
-#endif
 #endif
 };
 

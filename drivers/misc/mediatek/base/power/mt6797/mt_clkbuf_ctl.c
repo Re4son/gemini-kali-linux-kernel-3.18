@@ -537,16 +537,16 @@ void clk_buf_get_rf_drv_curr(void *rf_drv_curr)
 	RF_CLK_BUF4_DRIVING_CURR = CLK_BUF_DRIVING_CURR_0_9MA;
 #endif
 
-	((MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[0] = RF_CLK_BUF1_DRIVING_CURR;
-	((MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[1] = RF_CLK_BUF2_DRIVING_CURR;
-	((MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[2] = RF_CLK_BUF3_DRIVING_CURR;
-	((MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[3] = RF_CLK_BUF4_DRIVING_CURR;
+	((enum MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[0] = RF_CLK_BUF1_DRIVING_CURR;
+	((enum MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[1] = RF_CLK_BUF2_DRIVING_CURR;
+	((enum MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[2] = RF_CLK_BUF3_DRIVING_CURR;
+	((enum MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[3] = RF_CLK_BUF4_DRIVING_CURR;
 
 	clk_buf_warn("%s: rf_drv_curr_vals=%d %d %d %d\n", __func__,
-		     ((MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[0],
-		     ((MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[1],
-		     ((MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[2],
-		     ((MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[3]);
+		     ((enum MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[0],
+		     ((enum MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[1],
+		     ((enum MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[2],
+		     ((enum MTK_CLK_BUF_DRIVING_CURR *)rf_drv_curr)[3]);
 }
 
 /* Called by ccci driver to keep afcdac value sent from modem */

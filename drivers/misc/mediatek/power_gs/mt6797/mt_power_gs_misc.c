@@ -49,6 +49,8 @@ static void mt_power_gs_dump_value(struct seq_file *m, const unsigned int pBaseA
 	else
 		lBaseAddr = gs_others_base;
 
+	if (lBaseAddr == NULL)
+		return;
 	/*pr_err("[power_gs_misc] lBase %p\n", lBaseAddr);*/
 
 	for (i = 0; i < len; i += 3) {
@@ -207,7 +209,10 @@ static int __init mt_power_gs_misc_init(void)
 #if DEBUG_MSG_ON
 	pr_err("[power_gs_misc] Begin %s\n", __func__);
 #endif
-
+#if 1
+	/*Disable the proc node because of Syzkaller KE problem*/
+	return 0;
+#else
 	if (!mt_power_gs_dir)
 		pr_err("[power_gs_misc] [%s]: mkdir /proc/mt_power_gs failed\n", __func__);
 
@@ -215,6 +220,7 @@ static int __init mt_power_gs_misc_init(void)
 
 	/*pr_err("[power_gs_misc] End %s\n", __func__);*/
 	return 0;
+#endif
 }
 
 static void __exit mt_power_gs_misc_exit(void)

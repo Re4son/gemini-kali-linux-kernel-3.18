@@ -3514,9 +3514,9 @@ static void eem_set_eem_volt(struct eem_det *det)
 	struct eem_ctrl *ctrl = id_to_eem_ctrl(det->ctrl_id);
 
 	cur_temp = det->ops->get_temp(det);
-	/* eem_debug("eem_set_eem_volt cur_temp = %d, valid = %d\n", cur_temp, tscpu_is_temp_valid()); */
+	/* eem_debug("eem_set_eem_volt cur_temp = %d\n", cur_temp); */
 	/* 6250 * 10uV = 62.5mv */
-	if ((cur_temp <= 33000) || !tscpu_is_temp_valid()) {
+	if (cur_temp <= 33000) {
 		if (EEM_CTRL_BIG == det->ctrl_id)
 			low_temp_offset = det->ops->volt_2_pmic(det, 6250 + det->pmic_base);
 		else

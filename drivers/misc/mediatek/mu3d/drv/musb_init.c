@@ -45,11 +45,7 @@
 #include <linux/of_device.h>
 #endif
 
-#ifdef CONFIG_USBIF_COMPLIANCE
 static struct musb_fifo_cfg mtu3d_cfg[] = {
-#else
-static struct musb_fifo_cfg mtu3d_cfg[] __initdata = {
-#endif
 	{.hw_ep_num = 1, .style = FIFO_TX, .maxpacket = 1024,},
 	{.hw_ep_num = 1, .style = FIFO_RX, .maxpacket = 1024,},
 	{.hw_ep_num = 2, .style = FIFO_TX, .maxpacket = 1024,},
@@ -559,14 +555,12 @@ static irqreturn_t generic_interrupt(int irq, void *__hci)
 		os_printk(K_INFO, "===L1[%x] DMA[%x]\n", dwL1Value, dwDmaIntrValue);
 	}
 
-#ifdef SUPPORT_U3
-	if (musb_speed && (dwL1Value & MAC3_INTR)) {
+	if (dwL1Value & MAC3_INTR) {
 		dwLtssmValue = os_readl(U3D_LTSSM_INTR) & os_readl(U3D_LTSSM_INTR_ENABLE);
 		/* Write 1 clear */
 		os_writel(U3D_LTSSM_INTR, dwLtssmValue);
 		os_printk(K_DEBUG, "===L1[%x] LTSSM[%x]\n", dwL1Value, dwLtssmValue);
 	}
-#endif
 #ifdef USE_SSUSB_QMU
 	if (dwL1Value & QMU_INTR) {
 		wIntrQMUValue = os_readl(U3D_QISAR1) & os_readl(U3D_QIER1);

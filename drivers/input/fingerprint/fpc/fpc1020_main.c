@@ -1279,7 +1279,6 @@ static int fpc1020_get_of_pdata(struct device *dev,
 	}
 
 	if (!irq_prop || !rst_prop) {
-		pdata->reset_gpio = be32_to_cpup(rst_prop);
 		dev_err(dev, "%s: Missing OF property\n", __func__);
 		goto of_err;
 	}

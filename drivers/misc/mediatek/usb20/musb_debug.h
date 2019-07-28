@@ -59,7 +59,7 @@
 #define xprintk(level,  format, args...) do { \
 	if (_dbg_level(level)) { \
 		if (musb_uart_debug) {\
-			pr_warn("[MUSB]%s %d: " format , \
+			pr_notice("[MUSB]%s %d: " format , \
 				__func__, __LINE__ , ## args); \
 		} \
 		else{\
@@ -68,8 +68,8 @@
 		} \
 	} } while (0)
 
-extern unsigned musb_debug;
-extern unsigned musb_uart_debug;
+extern int musb_debug;
+extern int musb_uart_debug;
 
 static inline int _dbg_level(unsigned level)
 {

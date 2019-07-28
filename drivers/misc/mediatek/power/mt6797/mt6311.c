@@ -7266,7 +7266,8 @@ static ssize_t store_mt6311_access(struct device *dev, struct device_attribute *
 		pvalue = (char *)buf;
 		if (size > 4) {
 			addr = strsep(&pvalue, " ");
-			ret = kstrtou32(addr, 16, (unsigned int *)&reg_address);
+			if (addr)
+				ret = kstrtou32(addr, 16, (unsigned int *)&reg_address);
 		} else
 			ret = kstrtou32(pvalue, 16, (unsigned int *)&reg_address);
 		/*ret = kstrtoul(buf, 16, (unsigned long *)&reg_address);*/
@@ -7274,7 +7275,8 @@ static ssize_t store_mt6311_access(struct device *dev, struct device_attribute *
 		if (size > 4) {
 			/*reg_value = simple_strtoul((pvalue + 1), NULL, 16);*/
 			val =  strsep(&pvalue, " ");
-			ret = kstrtou32(val, 16, (unsigned int *)&reg_value);
+			if (val)
+				ret = kstrtou32(val, 16, (unsigned int *)&reg_value);
 			pr_err("[store_mt6311_access] write mt6311 reg 0x%x with value 0x%x !\n",
 				reg_address, reg_value);
 

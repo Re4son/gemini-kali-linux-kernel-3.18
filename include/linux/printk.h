@@ -16,6 +16,10 @@ extern bool printk_disable_uart;
 extern bool mt_get_uartlog_status(void);
 extern void set_uartlog_status(bool value);
 
+void set_detect_count(int count);
+int get_detect_count(void);
+void set_logtoomuch_enable(int value);
+int get_logtoomuch_enable(void);
 
 #ifdef CONFIG_MT_PRINTK_UART_CONSOLE
 void mt_disable_uart(void);
@@ -31,33 +35,6 @@ extern void aee_wdt_zap_locks(void);
 #define KLOG_MODNAME		"[name:"KBUILD_MODNAME"&]"
 #else
 #define KLOG_MODNAME		""
-#endif
-
-#if defined(CONFIG_MT_ENG_BUILD) && defined(CONFIG_LOG_TOO_MUCH_WARNING)
-extern void set_detect_count(int count);
-extern int get_detect_count(void);
-extern void set_logtoomuch_enable(int value);
-extern int get_logtoomuch_enable(void);
-#else
-static inline void set_detect_count(int count)
-{
-
-}
-
-static inline int get_detect_count(void)
-{
-	return 0;
-}
-
-static inline void set_logtoomuch_enable(int value)
-{
-
-}
-
-static inline int get_logtoomuch_enable(void)
-{
-	return 0;
-}
 #endif
 
 static inline int printk_get_level(const char *buffer)

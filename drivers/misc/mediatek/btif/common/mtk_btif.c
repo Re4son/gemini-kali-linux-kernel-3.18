@@ -89,8 +89,6 @@ static int _btif_dma_write(p_mtk_btif p_btif,
 
 static unsigned int btif_bbs_wr_direct(p_btif_buf_str p_bbs,
 				unsigned char *p_buf, unsigned int buf_len);
-static unsigned int btif_bbs_read(p_btif_buf_str p_bbs,
-			   unsigned char *p_buf, unsigned int buf_len);
 static unsigned int btif_bbs_write(p_btif_buf_str p_bbs,
 			    unsigned char *p_buf, unsigned int buf_len);
 static void btif_dump_bbs_str(unsigned char *p_str, p_btif_buf_str p_bbs);
@@ -260,9 +258,9 @@ int _btif_suspend(p_mtk_btif p_btif)
 {
 	int i_ret;
 
-	if (_btif_state_hold(p_btif))
-		return E_BTIF_INTR;
-	if (NULL != p_btif) {
+	if (p_btif != NULL) {
+		if (_btif_state_hold(p_btif))
+			return E_BTIF_INTR;
 		if (!(p_btif->enable))
 			i_ret = 0;
 		else {
@@ -292,9 +290,9 @@ int _btif_suspend(p_mtk_btif p_btif)
 				}
 			}
 		}
+		BTIF_STATE_RELEASE(p_btif);
 	} else
 		i_ret = -1;
-	BTIF_STATE_RELEASE(p_btif);
 
 	return i_ret;
 }
@@ -392,9 +390,9 @@ int _btif_resume(p_mtk_btif p_btif)
 	int i_ret = 0;
 	ENUM_BTIF_STATE state = B_S_MAX;
 
-	if (_btif_state_hold(p_btif))
-		return E_BTIF_INTR;
-	if (NULL != p_btif) {
+	if (p_btif != NULL) {
+		if (_btif_state_hold(p_btif))
+			return E_BTIF_INTR;
 		state = _btif_state_get(p_btif);
 		if (!(p_btif->enable))
 			i_ret = 0;
@@ -403,9 +401,9 @@ int _btif_resume(p_mtk_btif p_btif)
 		else
 			BTIF_INFO_FUNC
 				("BTIF state: %s before resume, do nothing\n", g_state[state]);
+		BTIF_STATE_RELEASE(p_btif);
 	} else
 		i_ret = -1;
-	BTIF_STATE_RELEASE(p_btif);
 
 	return i_ret;
 }
@@ -613,54 +611,13 @@ static int btif_file_release(struct inode *pinode, struct file *pfile)
 static ssize_t btif_file_read(struct file *pfile,
 			      char __user *buf, size_t count, loff_t *f_ops)
 {
-	int i_ret = 0;
-	int rd_len = 0;
-
-	BTIF_INFO_FUNC("++\n");
-	down(&rd_mtx);
-	rd_len = btif_bbs_read(&(g_btif[0].btif_buf), rd_buf, sizeof(rd_buf));
-	while (0 == rd_len) {
-		if (pfile->f_flags & O_NONBLOCK)
-			break;
-
-		wait_event(btif_wq, rx_notify_flag != 0);
-		rx_notify_flag = 0;
-		rd_len =
-		    btif_bbs_read(&(g_btif[0].btif_buf), rd_buf,
-				  sizeof(rd_buf));
-	}
-
-	if (0 == rd_len)
-		i_ret = 0;
-	else if ((0 < rd_len) && (0 == copy_to_user(buf, rd_buf, rd_len)))
-		i_ret = rd_len;
-	else
-		i_ret = -EFAULT;
-
-	up(&rd_mtx);
-	BTIF_INFO_FUNC("--, i_ret:%d\n", i_ret);
-	return i_ret;
+	return -EFAULT;
 }
 
 ssize_t btif_file_write(struct file *filp,
 			const char __user *buf, size_t count, loff_t *f_pos)
 {
-	int i_ret = 0;
-	int copy_size = 0;
-
-	copy_size = count > sizeof(wr_buf) ? sizeof(wr_buf) : count;
-
-	BTIF_INFO_FUNC("++\n");
-	down(&wr_mtx);
-	if (copy_from_user(&wr_buf[0], &buf[0], copy_size))
-		i_ret = -EFAULT;
-	else
-		i_ret = btif_send_data(&g_btif[0], wr_buf, copy_size);
-
-	up(&wr_mtx);
-	BTIF_INFO_FUNC("--, i_ret:%d\n", i_ret);
-
-	return i_ret;
+	return -EFAULT;
 }
 #ifdef CONFIG_COMPAT
 long btif_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
@@ -766,14 +723,15 @@ static ssize_t driver_flag_set(struct device_driver *drv,
 	char *p_token = NULL;
 	char *p_delimiter = " \t";
 
-	BTIF_INFO_FUNC("buffer = %s, count = %zd\n", buffer, count);
 	if (len >= sizeof(buf)) {
 		BTIF_ERR_FUNC("input handling fail!\n");
 		len = sizeof(buf) - 1;
 		return -1;
 	}
 
-	memcpy(buf, buffer, sizeof(buf));
+	strncpy(buf, buffer, count);
+	buf[count] = '\0';
+	BTIF_INFO_FUNC("buffer = %s, count = %zd\n", buf, count);
 	p_buf = buf;
 
 	p_token = strsep(&p_buf, p_delimiter);
@@ -2235,6 +2193,7 @@ int mtk_btif_rxd_be_blocked_flag_get(void)
 	}
 	return ret;
 }
+EXPORT_SYMBOL(mtk_btif_rxd_be_blocked_flag_get);
 #endif
 static int btif_rx_thread(void *p_data)
 {
@@ -2245,13 +2204,8 @@ static int btif_rx_thread(void *p_data)
 
 
 	while (1) {
-		if (p_btif->enable) {
-			/*if BTIF is enabled we will polling if there's any data received at least each 360ms*/
-			wait_for_completion_interruptible_timeout(&p_btif->rx_comp, msecs_to_jiffies(360));
-		} else {
-			/*if BTIF is not enabled, stop polling*/
-			wait_for_completion_interruptible(&p_btif->rx_comp);
-		}
+		wait_for_completion_interruptible(&p_btif->rx_comp);
+
 		if (kthread_should_stop()) {
 			BTIF_WARN_FUNC("btif rx thread stoping ...\n");
 			break;
@@ -2613,67 +2567,10 @@ unsigned int btif_bbs_write(p_btif_buf_str p_bbs,
 		hal_btif_dump_reg(p_btif->p_btif_info, REG_BTIF_ALL);
 		hal_dma_dump_reg(p_btif->p_rx_dma->p_dma_info, REG_RX_DMA_ALL);
 		_btif_dump_memory("<DMA Rx vFIFO>", p_buf, buf_len);
+		BBS_INIT(p_bbs);
 	}
 
 	return wr_len;
-}
-
-unsigned int btif_bbs_read(p_btif_buf_str p_bbs,
-			   unsigned char *p_buf, unsigned int buf_len)
-{
-	unsigned int rd_len = 0;
-	unsigned int ava_len = 0;
-	unsigned int wr_idx = p_bbs->wr_idx;
-
-	ava_len = BBS_COUNT_CUR(p_bbs, wr_idx);
-	if (ava_len >= 4096) {
-		BTIF_WARN_FUNC("ava_len too long, size(%d)\n", ava_len);
-		btif_dump_bbs_str("Rx buffer tooo long", p_bbs);
-	}
-	if (0 != ava_len) {
-		if (buf_len >= ava_len) {
-			rd_len = ava_len;
-			if (wr_idx >= (p_bbs)->rd_idx) {
-				memcpy(p_buf, BBS_PTR(p_bbs,
-						      p_bbs->rd_idx),
-				       ava_len);
-				(p_bbs)->rd_idx = wr_idx;
-			} else {
-				unsigned int tail_len = BBS_SIZE(p_bbs) -
-				    (p_bbs)->rd_idx;
-				memcpy(p_buf, BBS_PTR(p_bbs,
-						      p_bbs->rd_idx),
-				       tail_len);
-				memcpy(p_buf + tail_len, BBS_PTR(p_bbs,
-								 0), ava_len - tail_len);
-				(p_bbs)->rd_idx = wr_idx;
-			}
-		} else {
-			rd_len = buf_len;
-			if (wr_idx >= (p_bbs)->rd_idx) {
-				memcpy(p_buf, BBS_PTR(p_bbs,
-						      p_bbs->rd_idx),
-				       rd_len);
-				(p_bbs)->rd_idx = (p_bbs)->rd_idx + rd_len;
-			} else {
-				unsigned int tail_len = BBS_SIZE(p_bbs) -
-				    (p_bbs)->rd_idx;
-				if (tail_len >= rd_len) {
-					memcpy(p_buf, BBS_PTR(p_bbs, p_bbs->rd_idx),
-					       rd_len);
-					(p_bbs)->rd_idx =
-					    ((p_bbs)->rd_idx + rd_len) & (BBS_MASK(p_bbs));
-				} else {
-					memcpy(p_buf, BBS_PTR(p_bbs, p_bbs->rd_idx), tail_len);
-					memcpy(p_buf + tail_len,
-					       (p_bbs)->p_buf, rd_len - tail_len);
-					(p_bbs)->rd_idx = rd_len - tail_len;
-				}
-			}
-		}
-	}
-	mb();
-	return rd_len;
 }
 
 unsigned int btif_bbs_wr_direct(p_btif_buf_str p_bbs,

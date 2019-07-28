@@ -575,7 +575,7 @@ static void __batt_meter_parse_table(const struct device_node *np,
 int __batt_meter_init_cust_data_from_dt(void)
 {
 	struct device_node *np;
-	int num;
+	int num = 0;
 	unsigned int idx, addr, val;
 
 	/* check customer setting */
@@ -1145,6 +1145,12 @@ int force_get_tbat(kal_bool update)
 			 bat_temperature_volt_temp, bat_temperature_volt, fg_current_state,
 			 fg_current_temp, fg_r_value, bat_temperature_val);
 		pre_bat_temperature_val = bat_temperature_val;
+
+		if (bat_temperature_val > 55)
+			pr_notice("[force_get_tbat] %d,%d,%d,%d,%d,%d\n",
+			 bat_temperature_volt_temp, bat_temperature_volt, fg_current_state,
+			 fg_current_temp, fg_r_value, bat_temperature_val);
+
 	} else {
 		bat_temperature_val = pre_bat_temperature_val;
 	}
@@ -1435,7 +1441,7 @@ signed int fgauge_read_r_bat_by_v(signed int voltage)
 	profile_p = fgauge_get_profile_r_table(batt_meter_cust_data.temperature_t);
 	if (profile_p == NULL) {
 		bm_print(BM_LOG_CRTI, "[FGADC] fgauge get R-Table profile : fail !\r\n");
-		return (profile_p + 0)->resistance;
+		return 170;
 	}
 
 	saddles = fgauge_get_saddles_r_table();
@@ -1477,7 +1483,10 @@ void fgauge_construct_battery_profile_init(void)
 	saddles = fgauge_get_saddles();
 	temp_profile_p =
 	    (BATTERY_PROFILE_STRUCT_P) kmalloc(51 * sizeof(*temp_profile_p), GFP_KERNEL);
-	memset(temp_profile_p, 0, 51 * sizeof(*temp_profile_p));
+
+	if (temp_profile_p != NULL)
+		memset(temp_profile_p, 0, 51 * sizeof(*temp_profile_p));
+
 	for (i = 0; i < PROFILE_SIZE; i++) {
 		profile_index = 0;
 		for (j = 0; j * 2 <= 100; j++) {
@@ -1486,10 +1495,12 @@ void fgauge_construct_battery_profile_init(void)
 					profile_index++;
 					continue;
 				} else if (((profile_p[i] + profile_index)->percentage) == j * 2) {
-					(temp_profile_p + j)->voltage =
-					    (profile_p[i] + profile_index)->voltage;
-					(temp_profile_p + j)->percentage =
-					    (profile_p[i] + profile_index)->percentage;
+					if (temp_profile_p != NULL) {
+						(temp_profile_p + j)->voltage =
+							(profile_p[i] + profile_index)->voltage;
+						(temp_profile_p + j)->percentage =
+							(profile_p[i] + profile_index)->percentage;
+					}
 					break;
 				}
 				low_p = (profile_p[i] + profile_index - 1)->percentage;
@@ -1497,25 +1508,30 @@ void fgauge_construct_battery_profile_init(void)
 				now_p = j * 2;
 				low_vol = (profile_p[i] + profile_index)->voltage;
 				high_vol = (profile_p[i] + profile_index - 1)->voltage;
-				(temp_profile_p + j)->voltage =
-				    (low_vol * 1000 +
-				     ((high_vol - low_vol) * 1000 * (now_p - low_p) / (high_p -
-										       low_p))) /
-				    1000;
-				(temp_profile_p + j)->percentage = j * 2;
+				if (temp_profile_p != NULL) {
+					(temp_profile_p + j)->voltage =
+					(low_vol * 1000 + ((high_vol - low_vol) * 1000 * (now_p - low_p) /
+						(high_p - low_p))) / 1000;
+					(temp_profile_p + j)->percentage = j * 2;
+				}
 
 				break;
 			}
-			bm_print(BM_LOG_CRTI, "new battery_profile[%d,%d] <%d,%d>\n", i, j,
+			if (temp_profile_p != NULL) {
+				bm_print(BM_LOG_CRTI, "new battery_profile[%d,%d] <%d,%d>\n", i, j,
 				 (temp_profile_p + j)->percentage, (temp_profile_p + j)->voltage);
+			}
 		}
 
 		for (j = 0; j * 2 <= 100; j++) {
-			(profile_p[i] + j)->voltage = (temp_profile_p + j)->voltage;
-			(profile_p[i] + j)->percentage = (temp_profile_p + j)->percentage;
+			if (temp_profile_p != NULL) {
+				(profile_p[i] + j)->voltage = (temp_profile_p + j)->voltage;
+				(profile_p[i] + j)->percentage = (temp_profile_p + j)->percentage;
+			}
 		}
 	}
-	kfree(temp_profile_p);
+	if (temp_profile_p != NULL)
+		kfree(temp_profile_p);
 }
 
 void fgauge_construct_battery_profile(signed int temperature, BATTERY_PROFILE_STRUCT_P temp_profile_p)
@@ -2955,6 +2971,7 @@ void fgauge_algo_run_init(void)
 unsigned char reset_fg_bat_int = KAL_TRUE;
 void fg_bat_int_handler(void)
 {
+	pr_notice("fg_bat_int_handler\n");
 	reset_fg_bat_int = KAL_TRUE;
 	wake_up_bat2();
 }
@@ -3076,9 +3093,9 @@ signed int get_dynamic_period(int first_use, int first_wakeup_time, int battery_
 		car_instant = car_instant - (car_instant * 2);
 
 
-	if (BMT_status.UI_SOC != BMT_status.SOC) {
-		last_time = 10;
-		g_spm_timer = 10;
+	if (BMT_status.UI_SOC != BMT_status.SOC && gDisableGM != true) {
+		last_time = 60;
+		g_spm_timer = 60;
 		bm_print(BM_LOG_CRTI, "[get_dynamic_period] UISOC:%d SOC:%d vbat:%d current:%d car:%d new_time:%d\n",
 			BMT_status.UI_SOC, BMT_status.SOC, vbat_val, current_instant, car_instant, g_spm_timer);
 		return g_spm_timer;
@@ -3629,6 +3646,11 @@ signed int battery_meter_get_VSense(void)
 	ret = battery_meter_ctrl(BATTERY_METER_CMD_GET_ADC_V_I_SENSE, &val);
 	return val;
 #endif
+}
+
+signed int battery_meter_get_QMAX25(void)
+{
+	return batt_meter_cust_data.q_max_pos_25;
 }
 
 /* ============================================================ // */
@@ -4219,8 +4241,8 @@ static int battery_meter_probe(struct platform_device *dev)
 		temp_strptr =
 		    kzalloc(strlen(saved_command_line) + strlen(" androidboot.mode=charger") + 1,
 			    GFP_KERNEL);
-		strcpy(temp_strptr, saved_command_line);
-		strcat(temp_strptr, " androidboot.mode=charger");
+		strncpy(temp_strptr, saved_command_line, strlen(saved_command_line));
+		strncat(temp_strptr, " androidboot.mode=charger", strlen(" androidboot.mode=charger") + 1);
 		saved_command_line = temp_strptr;
 	}
 #endif
@@ -4505,7 +4527,7 @@ static int battery_meter_resume(struct platform_device *dev)
 
 #elif defined(SOC_BY_SW_FG) || defined(SOC_BY_HW_FG)
 #if defined(SOC_BY_SW_FG)
-	signed int hw_ocv_after_sleep;
+	signed int hw_ocv_after_sleep = 0;
 	signed int DOD_hwocv;
 	struct timespec now_time;
 #endif
@@ -4547,11 +4569,13 @@ static int battery_meter_resume(struct platform_device *dev)
 			pr_warn("[battery_meter] trigger oam_run() for 30s threshold.\n");
 	}
 
+
+	battery_meter_ctrl(BATTERY_METER_CMD_GET_HW_OCV,
+		&hw_ocv_after_sleep);
+
 	/* try to calibrate D0 by HWOCV
 	if battery has no loading for more than 30mins */
 	if (sleep_interval > 1800 && bat_is_charger_exist() == KAL_FALSE) {
-		battery_meter_ctrl(BATTERY_METER_CMD_GET_HW_OCV,
-			&hw_ocv_after_sleep);
 
 		DOD_hwocv = fgauge_read_d_by_v(hw_ocv_after_sleep);
 
@@ -4582,8 +4606,8 @@ static int battery_meter_resume(struct platform_device *dev)
 	}
 
 	bm_print(BM_LOG_CRTI,
-		 "sleeptime=(%d)s, be_ocv=(%d), af_ocv=(%d), D0=(%d), car1=(%d), car2=(%d)\n",
-		 _g_bat_sleep_total_time,
+		 "sleeptime=(%d:%d)s, be_ocv=(%d), af_ocv=(%d), D0=(%d), car1=(%d), car2=(%d)\n",
+		 _g_bat_sleep_total_time, sleep_interval,
 		 g_hw_ocv_before_sleep, hw_ocv_after_sleep, oam_d0, oam_car_1, oam_car_2);
 #endif
 #endif

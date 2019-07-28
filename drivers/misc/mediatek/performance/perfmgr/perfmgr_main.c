@@ -77,10 +77,6 @@ static int __init init_perfmgr(void)
 	init_perfmgr_touch();
 #endif
 
-#ifdef MTK_BOOST_SUPPORT
-	init_perfmgr_boost();
-#endif
-
 	return 0;
 }
 device_initcall(init_perfmgr);

@@ -630,7 +630,7 @@ static int set_memory_buffer(disp_session_input_config *input)
 	int i = 0;
 	int layer_id = 0;
 	unsigned int dst_size = 0;
-	unsigned int dst_mva = 0;
+	unsigned long dst_mva = 0;
 	unsigned int session_id = 0;
 	disp_session_sync_info *session_info;
 
@@ -670,7 +670,7 @@ static int set_memory_buffer(disp_session_input_config *input)
 
 
 			DISPPR_FENCE
-			    ("S+/ML%d/e%d/id%d/%dx%d(%d,%d)(%d,%d)/%s/%d/0x%p/mva0x%x/t%d/sec%d\n",
+			    ("S+/ML%d/e%d/id%d/%dx%d(%d,%d)(%d,%d)/%s/%d/0x%p/mva0x%lx/t%d/sec%d\n",
 			     input->config[i].layer_id, input->config[i].layer_enable,
 			     input->config[i].next_buff_idx, input->config[i].src_width,
 			     input->config[i].src_height, input->config[i].src_offset_x,
@@ -1609,6 +1609,10 @@ const char *_session_ioctl_spy(unsigned int cmd)
 		return "DISP_IOCTL_SET_GAMMALUT";
 	case DISP_IOCTL_SET_CCORR:
 		return "DISP_IOCTL_SET_CCORR";
+	case DISP_IOCTL_CCORR_EVENTCTL:
+		return "DISP_IOCTL_CCORR_EVENTCTL";
+	case DISP_IOCTL_CCORR_GET_IRQ:
+		return "DISP_IOCTL_CCORR_GET_IRQ";
 	case DISP_IOCTL_SET_PQPARAM:
 		return "DISP_IOCTL_SET_PQPARAM";
 	case DISP_IOCTL_GET_PQPARAM:
@@ -1724,6 +1728,8 @@ long mtk_disp_mgr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case DISP_IOCTL_AAL_SET_PARAM:
 	case DISP_IOCTL_SET_GAMMALUT:
 	case DISP_IOCTL_SET_CCORR:
+	case DISP_IOCTL_CCORR_EVENTCTL:
+	case DISP_IOCTL_CCORR_GET_IRQ:
 	case DISP_IOCTL_SET_PQPARAM:
 	case DISP_IOCTL_GET_PQPARAM:
 	case DISP_IOCTL_SET_PQINDEX:
@@ -1957,6 +1963,8 @@ static long mtk_disp_mgr_compat_ioctl(struct file *file, unsigned int cmd,  unsi
 	case DISP_IOCTL_PQ_GET_MDP_TDSHP_REG:
 	case DISP_IOCTL_WRITE_SW_REG:
 	case DISP_IOCTL_READ_SW_REG:
+	case DISP_IOCTL_CCORR_EVENTCTL:
+	case DISP_IOCTL_CCORR_GET_IRQ:
 		{
 #ifndef NO_PQ_IOCTL
 			ret = primary_display_user_cmd(cmd, arg);

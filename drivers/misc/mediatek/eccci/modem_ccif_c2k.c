@@ -1141,11 +1141,14 @@ static int md_ccif_op_send_skb(struct ccci_modem *md, int qno,
 			 * so we need to use mapping table to convert channel id here.
 			 */
 			ccci_to_c2k_ch = ccci_ch_to_c2k_ch(md, ccci_h->channel, OUT);
-			if (ccci_to_c2k_ch >= 0 && ccci_to_c2k_ch < C2K_OVER_MAX_CH)
+			if (ccci_to_c2k_ch >= 0 && ccci_to_c2k_ch < C2K_OVER_MAX_CH) {
 				ccci_h->channel = (u16) ccci_to_c2k_ch;
-			else {
+				/*make sure skb is updated*/
+				mb();
+			} else {
 				ret = -CCCI_ERR_INVALID_LOGIC_CHANNEL_ID;
 				CCCI_ERROR_LOG(md->index, TAG, "channel num error (%d)\n", ccci_to_c2k_ch);
+				spin_unlock_irqrestore(&queue->tx_lock, flags);
 				return ret;
 			}
 			if (ccci_h->data[1] == C2K_HB_MSG)

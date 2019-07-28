@@ -744,12 +744,12 @@
 
 
 
-typedef struct spower_raw_s {
+struct spower_raw_s {
 	int vsize;
 	int tsize;
 	int table_size;
 	int *table[];
-} spower_raw_t;
+};
 
 
 /** table order: ff,tt,ss **/
@@ -796,49 +796,49 @@ int vmd1_leakage_data[][VSIZE*TSIZE+VSIZE+TSIZE] = {
 		VMD1_TABLE_2,
 };
 
-spower_raw_t cpubig_spower_raw = {
+struct spower_raw_s cpubig_spower_raw = {
 	.vsize = VSIZE,
 	.tsize = TSIZE,
 	.table_size = MAX_TABLE_SIZE,
 	.table = { (int *)&cpubig_leakage_data[0], (int *)&cpubig_leakage_data[1], (int *)&cpubig_leakage_data[2] },
 };
 
-spower_raw_t gpu_spower_raw = {
+struct spower_raw_s gpu_spower_raw = {
 	.vsize = VSIZE,
 	.tsize = TSIZE,
 	.table_size = MAX_TABLE_SIZE,
 	.table = { (int *)&gpu_leakage_data[0], (int *)&gpu_leakage_data[1], (int *)&gpu_leakage_data[2] },
 };
 
-spower_raw_t vcore_spower_raw = {
+struct spower_raw_s vcore_spower_raw = {
 	.vsize = VSIZE,
 	.tsize = TSIZE,
 	.table_size = MAX_TABLE_SIZE,
 	.table = { (int *)&vcore_leakage_data[0], (int *)&vcore_leakage_data[1], (int *)&vcore_leakage_data[2] },
 };
 
-spower_raw_t cpul_spower_raw = {
+struct spower_raw_s cpul_spower_raw = {
 	.vsize = VSIZE,
 	.tsize = TSIZE,
 	.table_size = MAX_TABLE_SIZE,
 	.table = { (int *)&cpul_leakage_data[0], (int *)&cpul_leakage_data[1], (int *)&cpul_leakage_data[2] },
 };
 
-spower_raw_t cpull_spower_raw = {
+struct spower_raw_s cpull_spower_raw = {
 	.vsize = VSIZE,
 	.tsize = TSIZE,
 	.table_size = MAX_TABLE_SIZE,
 	.table = { (int *)&cpull_leakage_data[0], (int *)&cpull_leakage_data[1], (int *)&cpull_leakage_data[2] },
 };
 
-spower_raw_t modem_spower_raw = {
+struct spower_raw_s modem_spower_raw = {
 	.vsize = VSIZE,
 	.tsize = TSIZE,
 	.table_size = MAX_TABLE_SIZE,
 	.table = { (int *)&modem_leakage_data[0], (int *)&modem_leakage_data[1], (int *)&modem_leakage_data[2] },
 };
 
-spower_raw_t vmd1_spower_raw = {
+struct spower_raw_s vmd1_spower_raw = {
 	.vsize = VSIZE,
 	.tsize = TSIZE,
 	.table_size = MAX_TABLE_SIZE,
@@ -847,23 +847,23 @@ spower_raw_t vmd1_spower_raw = {
 
 
 
-typedef struct voltage_row_s {
+struct voltage_row_s {
 	int mV[VSIZE];
-} vrow_t;
+};
 
-typedef struct temperature_row_s {
+struct temperature_row_s {
 	int deg;
 	int mA[VSIZE];
-} trow_t;
+};
 
 
-typedef struct sptab_s {
+struct sptab_s {
 	int vsize;
 	int tsize;
 	int *data;		/* array[VSIZE + TSIZE + (VSIZE*TSIZE)] */
-	vrow_t *vrow;	/* pointer to voltage row of data */
-	trow_t *trow;	/* pointer to temperature row of data */
-} sptbl_t;
+	struct voltage_row_s *vrow;	/* pointer to voltage row of data */
+	struct temperature_row_s *trow;	/* pointer to temperature row of data */
+};
 
 #define trow(tab, ti)		((tab)->trow[ti])
 #define mA(tab, vi, ti)	((tab)->trow[ti].mA[vi])
@@ -873,17 +873,17 @@ typedef struct sptab_s {
 #define tsize(tab)			((tab)->tsize)
 #define tab_validate(tab)	(!!(tab) && (tab)->data != NULL)
 
-static inline void spower_tab_construct(sptbl_t (*tab)[], spower_raw_t *raw)
+static inline void spower_tab_construct(struct sptab_s (*tab)[], struct spower_raw_s *raw)
 {
 	int i;
-	sptbl_t *ptab = (sptbl_t *)tab;
+	struct sptab_s *ptab = (struct sptab_s *)tab;
 
 	for (i = 0; i < raw->table_size; i++) {
 		ptab->vsize = raw->vsize;
 		ptab->tsize = raw->tsize;
 		ptab->data = raw->table[i];
-		ptab->vrow = (vrow_t *)ptab->data;
-		ptab->trow = (trow_t *)(ptab->data + ptab->vsize);
+		ptab->vrow = (struct voltage_row_s *)ptab->data;
+		ptab->trow = (struct temperature_row_s *)(ptab->data + ptab->vsize);
 		ptab++;
 	}
 }

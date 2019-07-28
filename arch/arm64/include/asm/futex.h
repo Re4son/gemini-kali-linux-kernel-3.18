@@ -20,10 +20,15 @@
 
 #include <linux/futex.h>
 #include <linux/uaccess.h>
+
 #include <asm/errno.h>
+#include <asm/alternative.h>
 
 #define __futex_atomic_op(insn, ret, oldval, uaddr, tmp, oparg)		\
+do {									\
+	uaccess_enable();						\
 	asm volatile(							\
+	ALTERNATIVE("nop", "dmb sy", ARM64_WORKAROUND_855872)		\
 "1:	ldxr	%w1, %2\n"						\
 	insn "\n"							\
 "2:	stlxr	%w3, %w0, %2\n"						\
@@ -41,7 +46,9 @@
 "	.popsection\n"							\
 	: "=&r" (ret), "=&r" (oldval), "+Q" (*uaddr), "=&r" (tmp)	\
 	: "r" (oparg), "Ir" (-EFAULT)					\
-	: "memory")
+	: "memory");							\
+	uaccess_disable();						\
+} while (0)
 
 static inline int
 futex_atomic_op_inuser(int encoded_op, u32 __user *_uaddr)
@@ -114,8 +121,9 @@ futex_atomic_cmpxchg_inatomic(u32 *uval, u32 __user *_uaddr,
 		return -EFAULT;
 
 	uaddr = __uaccess_mask_ptr(_uaddr);
-
+	uaccess_enable();
 	asm volatile("// futex_atomic_cmpxchg_inatomic\n"
+	ALTERNATIVE("nop", "dmb sy", ARM64_WORKAROUND_855872)
 "1:	ldxr	%w1, %2\n"
 "	sub	%w3, %w1, %w4\n"
 "	cbnz	%w3, 3f\n"
@@ -134,6 +142,7 @@ futex_atomic_cmpxchg_inatomic(u32 *uval, u32 __user *_uaddr,
 	: "+r" (ret), "=&r" (val), "+Q" (*uaddr), "=&r" (tmp)
 	: "r" (oldval), "r" (newval), "Ir" (-EFAULT)
 	: "memory");
+	uaccess_disable();
 
 	*uval = val;
 	return ret;

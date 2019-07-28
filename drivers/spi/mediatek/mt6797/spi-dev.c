@@ -426,7 +426,6 @@ static int threadfunc4(void *data)
 		} else {
 			ret = spi_recv_check(&msg);
 			if (ret != 0) {
-				ret -= ret;
 				stress_err += ret;
 				SPIDEV_LOG("Message transfer err:%d\n", ret);
 			}
@@ -1118,7 +1117,7 @@ static int spi_test_remove(struct spi_device *spi)
 	return 0;
 }
 
-static int __init spi_test_probe(struct spi_device *spi)
+static int spi_test_probe(struct spi_device *spi)
 {
 	SPIDEV_LOG("spi test probe  enter\n");
 	/*spi_test = spi;*/

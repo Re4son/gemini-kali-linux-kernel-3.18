@@ -30,6 +30,15 @@
 /* #pragma GCC optimize ("O0") */
 #define MMP_DEVNAME "mmp"
 
+unsigned int MMProfileGetDumpSize(void)
+{
+	return 0;
+}
+
+void MMProfileGetDumpBuffer(unsigned int Start, unsigned long *pAddr, unsigned int *pSize)
+{
+}
+
 void MMProfileStart(int start)
 {
 }
@@ -51,10 +60,20 @@ MMP_Event MMProfileFindEvent(MMP_Event parent, const char *name)
 }
 EXPORT_SYMBOL(MMProfileFindEvent);
 
+void MMProfileEnableFTraceEvent(MMP_Event event, long enable, long ftrace)
+{
+}
+EXPORT_SYMBOL(MMProfileEnableFTraceEvent);
+
 void MMProfileEnableEvent(MMP_Event event, long enable)
 {
 }
 EXPORT_SYMBOL(MMProfileEnableEvent);
+
+void MMProfileEnableFTraceEventRecursive(MMP_Event event, long enable, long ftrace)
+{
+}
+EXPORT_SYMBOL(MMProfileEnableFTraceEventRecursive);
 
 void MMProfileEnableEventRecursive(MMP_Event event, long enable)
 {

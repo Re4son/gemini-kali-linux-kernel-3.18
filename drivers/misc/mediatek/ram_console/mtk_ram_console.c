@@ -157,6 +157,7 @@ struct last_reboot_reason {
 	uint8_t thermal_status;
 	uint8_t thermal_ATM_status;
 	uint64_t thermal_ktime;
+	int8_t thermal_wq_status;
 
 	uint8_t isr_el1;
 
@@ -174,6 +175,7 @@ struct last_reboot_reason {
 	uint8_t ocp_2_enable;
 	uint32_t scp_pc;
 	uint32_t scp_lr;
+	uint32_t hang_detect_timeout_count;
 
 	void *kparams;
 };
@@ -243,120 +245,6 @@ unsigned int ram_console_size(void)
 {
 	return ram_console_buffer->sz_console;
 }
-
-#ifdef CONFIG_MTK_EMMC_SUPPORT
-#ifdef CONFIG_MTK_AEE_IPANIC
-/*#include <mt-plat/sd_misc.h>*/
-
-#define EMMC_ADDR 0X700000
-static char *ram_console2_log;
-
-void last_kmsg_store_to_emmc(void)
-{
-	int buff_size;
-	int res;
-	struct wd_api *wd_api = NULL;
-
-	res = get_wd_api(&wd_api);
-	if (res == 0) {
-		/* if(num_online_cpus() > 1){ */
-		if (wd_api->wd_get_check_bit() > 1) {
-			pr_err("ram_console: online cpu %d!\n", wd_api->wd_get_check_bit());
-#ifdef CONFIG_MTPROF
-			if (boot_finish == 0)
-				return;
-#endif
-		}
-	}
-
-	/* save log to emmc */
-	buff_size = ram_console_buffer->sz_buffer;
-	card_dump_func_write((unsigned char *)ram_console_buffer, buff_size, EMMC_ADDR,
-			     0 /*DUMP_INTO_BOOT_CARD_IPANIC*/);
-
-	pr_err("ram_console: save kernel log (0x%x) to emmc!\n", buff_size);
-}
-
-static int ram_console_lastk_show(struct ram_console_buffer *buffer, struct seq_file *m, void *v);
-static int ram_console2_show(struct seq_file *m, void *v)
-{
-	struct ram_console_buffer *bufp = NULL;
-
-	bufp = (struct ram_console_buffer *)ram_console2_log;
-	seq_printf(m, "show last_kmsg2 sig %d, size %d", bufp->sig, bufp->log_size);
-	ram_console_lastk_show(bufp, m, v);
-	return 0;
-}
-
-
-static int ram_console2_file_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, ram_console2_show, inode->i_private);
-}
-
-static const struct file_operations ram_console2_file_ops = {
-	.owner = THIS_MODULE,
-	.open = ram_console2_file_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-};
-
-static int emmc_read_last_kmsg(void *data)
-{
-	int ret;
-	struct file *filp;
-
-	struct proc_dir_entry *entry;
-	struct ram_console_buffer *bufp = NULL;
-	int timeout = 0;
-
-	ram_console2_log = kzalloc(ram_console_buffer->sz_buffer, GFP_KERNEL);
-	if (ram_console2_log == NULL)
-		return 1;
-
-	do {
-		filp = expdb_open();
-		if (timeout++ > 60) {
-			pr_err("ram_console: open expdb partition error [%ld]!\n", PTR_ERR(filp));
-			return 1;
-		}
-		msleep(500);
-	} while (IS_ERR(filp));
-	ret = kernel_read(filp, EMMC_ADDR, ram_console2_log, ram_console_buffer->sz_buffer);
-	fput(filp);
-	if (IS_ERR(ERR_PTR(ret))) {
-		kfree(ram_console2_log);
-		ram_console2_log = NULL;
-		pr_err("ram_console: read emmc data 2 error!\n");
-		return 1;
-	}
-
-	bufp = (struct ram_console_buffer *)ram_console2_log;
-	if (bufp->sig != REBOOT_REASON_SIG) {
-		kfree(ram_console2_log);
-		ram_console2_log = NULL;
-		pr_err("ram_console: emmc read data sig is not match!\n");
-		return 1;
-	}
-
-	entry = proc_create("last_kmsg2", 0444, NULL, &ram_console2_file_ops);
-	if (!entry) {
-		pr_err("ram_console: failed to create proc entry\n");
-		kfree(ram_console2_log);
-		ram_console2_log = NULL;
-		return 1;
-	}
-	pr_err("ram_console: create last_kmsg2 ok.\n");
-	return 0;
-
-}
-#else
-void last_kmsg_store_to_emmc(void)
-{
-}
-#endif
-#endif
 
 #ifdef CONFIG_PSTORE
 void sram_log_save(const char *msg, int count)
@@ -755,18 +643,6 @@ static int __init ram_console_late_init(void)
 {
 	struct proc_dir_entry *entry;
 
-#ifdef CONFIG_MTK_EMMC_SUPPORT
-#ifdef CONFIG_MTK_AEE_IPANIC
-	int err;
-	static struct task_struct *thread;
-
-	thread = kthread_run(emmc_read_last_kmsg, 0, "read_poweroff_log");
-	if (IS_ERR(thread)) {
-		err = PTR_ERR(thread);
-		pr_err("ram_console: failed to create kernel thread: %d\n", err);
-	}
-#endif
-#endif
 	entry = proc_create("last_kmsg", 0444, NULL, &ram_console_file_ops);
 	if (!entry) {
 		pr_err("ram_console: failed to create proc entry\n");
@@ -1116,6 +992,7 @@ u32 aee_rr_curr_vcore_dvfs_opp(void)
 {
 	return LAST_RR_VAL(vcore_dvfs_opp);
 }
+EXPORT_SYMBOL(aee_rr_curr_vcore_dvfs_opp);
 
 void aee_rr_rec_vcore_dvfs_status(u32 val)
 {
@@ -1603,6 +1480,13 @@ void aee_rr_rec_thermal_ktime(u64 val)
 	LAST_RR_SET(thermal_ktime, val);
 }
 
+void aee_rr_rec_thermal_wq_status(s8 val)
+{
+	if (!ram_console_init_done || !ram_console_buffer)
+		return;
+	LAST_RR_SET(thermal_wq_status, val);
+}
+
 void aee_rr_rec_isr_el1(u8 val)
 {
 	if (!ram_console_init_done || !ram_console_buffer)
@@ -1907,6 +1791,11 @@ u64 aee_rr_curr_thermal_ktime(void)
 	return LAST_RR_VAL(thermal_ktime);
 }
 
+s8 aee_rr_curr_thermal_wq_status(void)
+{
+	return LAST_RR_VAL(thermal_wq_status);
+}
+
 u8 aee_rr_curr_isr_el1(void)
 {
 	return LAST_RR_VAL(isr_el1);
@@ -2008,6 +1897,13 @@ void aee_rr_rec_scp(void)
 
 	aee_rr_rec_scp_pc(pc);
 	aee_rr_rec_scp_lr(lr);
+}
+
+void aee_rr_rec_hang_detect_timeout_count(unsigned int val)
+{
+	if (!ram_console_init_done || !ram_console_buffer)
+		return;
+	LAST_RR_SET(hang_detect_timeout_count, val);
 }
 
 void aee_rr_rec_suspend_debug_flag(u32 val)
@@ -2665,6 +2561,11 @@ void aee_rr_show_thermal_ktime(struct seq_file *m)
 	seq_printf(m, "thermal_ktime: %lld\n", LAST_RRR_VAL(thermal_ktime));
 }
 
+void aee_rr_show_thermal_wq_status(struct seq_file *m)
+{
+	seq_printf(m, "thermal_wq_status: %d\n", LAST_RRR_VAL(thermal_wq_status));
+}
+
 void aee_rr_show_scp_pc(struct seq_file *m)
 {
 	seq_printf(m, "scp_pc: 0x%x\n", LAST_RRR_VAL(scp_pc));
@@ -2673,6 +2574,11 @@ void aee_rr_show_scp_pc(struct seq_file *m)
 void aee_rr_show_scp_lr(struct seq_file *m)
 {
 	seq_printf(m, "scp_lr: 0x%x\n", LAST_RRR_VAL(scp_lr));
+}
+
+void aee_rr_show_hang_detect_timeout_count(struct seq_file *m)
+{
+	seq_printf(m, "hang detect time out: 0x%x\n", LAST_RRR_VAL(hang_detect_timeout_count));
 }
 
 void aee_rr_show_isr_el1(struct seq_file *m)
@@ -2848,6 +2754,7 @@ last_rr_show_t aee_rr_show[] = {
 	aee_rr_show_thermal_status,
 	aee_rr_show_thermal_ATM_status,
 	aee_rr_show_thermal_ktime,
+	aee_rr_show_thermal_wq_status,
 	aee_rr_show_isr_el1,
 	aee_rr_show_idvfs_ctrl_reg,
 	aee_rr_show_idvfs_enable_cnt,
@@ -2862,6 +2769,7 @@ last_rr_show_t aee_rr_show[] = {
 	aee_rr_show_ocp_2_enable,
 	aee_rr_show_scp_pc,
 	aee_rr_show_scp_lr,
+	aee_rr_show_hang_detect_timeout_count,
 	aee_rr_show_hotplug_status,
 	aee_rr_show_hotplug_caller_callee_status,
 	aee_rr_show_hotplug_up_prepare_ktime,

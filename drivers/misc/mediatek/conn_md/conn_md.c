@@ -16,11 +16,78 @@
 #include "conn_md_dbg.h"
 
 /*global data structure defination*/
-
 CONN_MD_STRUCT g_conn_md;
+static struct conn_md_log_msg_info g_log_msg_info;
 
 static int _conn_md_del_msg_by_uid(uint32 u_id);
 static int conn_md_dmp_msg(P_CONN_MD_QUEUE p_msg_list, uint32 src_id, uint32 dst_id);
+
+static unsigned long conn_md_log_msg_interval_ms(struct conn_md_time_struct *p_begin, struct conn_md_time_struct *p_end)
+{
+	long long diff_sec;
+	long diff_msec;
+
+	diff_sec = p_end->sec - p_begin->sec;
+	diff_msec = (p_end->msec - p_begin->msec);
+	if (diff_msec < 0) {
+		diff_msec += 1000;
+		diff_sec -= 1;
+	}
+
+	return (diff_sec * 1000 + diff_msec);
+}
+
+static void conn_md_get_local_time(struct conn_md_time_struct *time)
+{
+	time->sec = local_clock();
+	time->msec = do_div(time->sec, 1000000000) / 1000000;
+}
+
+static void conn_md_log_add_msg(struct conn_md_time_struct *cur_time)
+{
+	char buf[CONN_MD_MSG_TIME_LENGTH];
+	int msg_buf_size, remain_size;
+
+	if (g_log_msg_info.msg_total == 0)
+		g_log_msg_info.msg_begin_time = *cur_time;
+
+	snprintf(buf, CONN_MD_MSG_TIME_LENGTH, " %llu.%03lu", cur_time->sec, cur_time->msec);
+
+	msg_buf_size = strlen(buf);
+	remain_size = CONN_MD_BUF_SIZE - strlen(g_log_msg_info.msg_buf) - 1;
+	if (remain_size >= msg_buf_size) {
+		strncat(g_log_msg_info.msg_buf, buf, msg_buf_size);
+		g_log_msg_info.msg_total++;
+	} else {
+		CONN_MD_ERR_FUNC("buff full, %s (remain %d), cant add %s (%d)",
+				 g_log_msg_info.msg_buf, remain_size, buf, msg_buf_size);
+	}
+}
+
+#define CONN_MD_LOG_MSG_HEAD_NAME "send message to Modem,"
+#define CONN_MD_LOG_MSG_MAX_INTERVAL_MS 1000
+static void conn_md_log_print_msg(struct conn_md_time_struct *cur_time)
+{
+	if (g_log_msg_info.msg_total > 0 && (g_log_msg_info.msg_total == CONN_MD_MSG_MAX_NUM ||
+		conn_md_log_msg_interval_ms(&g_log_msg_info.msg_begin_time, cur_time) >
+			CONN_MD_LOG_MSG_MAX_INTERVAL_MS)) {
+		CONN_MD_INFO_FUNC("%s%s\n", CONN_MD_LOG_MSG_HEAD_NAME, g_log_msg_info.msg_buf);
+		g_log_msg_info.msg_buf[0] = '\0';
+		g_log_msg_info.msg_total = 0;
+	}
+}
+
+static void conn_md_log_msg_time(uint32 dest_id)
+{
+	struct conn_md_time_struct cur_time;
+
+	conn_md_get_local_time(&cur_time);
+
+	if (dest_id == MD_MOD_EL1)
+		conn_md_log_add_msg(&cur_time);
+
+	conn_md_log_print_msg(&cur_time);
+}
 
 int conn_md_add_user(uint32 u_id, CONN_MD_BRIDGE_OPS *p_ops)
 {
@@ -47,6 +114,11 @@ int conn_md_add_user(uint32 u_id, CONN_MD_BRIDGE_OPS *p_ops)
 	if (NULL == p_user) {
 		/*memory allocation for user information */
 		p_user = kmalloc(sizeof(CONN_MD_USER), GFP_ATOMIC);
+		if (p_user == NULL) {
+			CONN_MD_ERR_FUNC("kmalloc failed\n");
+			mutex_unlock(&p_user_list->lock);
+			return CONN_MD_ERR_OTHERS;
+		}
 		INIT_LIST_HEAD(&p_user->entry);
 		list_add_tail(&p_user->entry, &p_user_list->list);
 		p_user->u_id = u_id;
@@ -370,6 +442,7 @@ static int conn_md_thread(void *p_data)
 					 p_cur_ilm, &p_cur_ilm->local_para_ptr, p_cur_ilm->local_para_ptr->msg_len);
 			CONN_MD_DBG_FUNC("sending message to user id (0x%08x)\n", p_cur_ilm->dest_mod_id);
 			/*send package to dest module by call corresponding rx callback function */
+			conn_md_log_msg_time(p_cur_ilm->dest_mod_id);
 			(*(p_user->ops.rx_cb)) (p_cur_ilm);
 			CONN_MD_DBG_FUNC("message sent to user id (0x%08x) done\n", p_cur_ilm->dest_mod_id);
 			mutex_unlock(&p_user_list->lock);

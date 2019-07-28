@@ -26,6 +26,7 @@
 #define MIDR_CORTEX_A72 MIDR_CPU_PART(ARM_CPU_IMP_ARM, ARM_CPU_PART_CORTEX_A72)
 #define MIDR_CORTEX_A73 MIDR_CPU_PART(ARM_CPU_IMP_ARM, ARM_CPU_PART_CORTEX_A73)
 #define MIDR_CORTEX_A75 MIDR_CPU_PART(ARM_CPU_IMP_ARM, ARM_CPU_PART_CORTEX_A75)
+#define MIDR_QCOM_FALKOR_V1 MIDR_CPU_PART(ARM_CPU_IMP_QCOM, QCOM_CPU_PART_FALKOR_V1)
 
 #define CPU_MODEL_MASK (MIDR_IMPLEMENTOR_MASK | MIDR_PARTNUM_MASK | \
 			MIDR_ARCHITECTURE_MASK)
@@ -109,8 +110,6 @@ static void __install_bp_hardening_cb(bp_hardening_cb_t fn,
 }
 #endif	/* CONFIG_KVM */
 
-
-
 static void  install_bp_hardening_cb(const struct arm64_cpu_capabilities *entry,
 				     bp_hardening_cb_t fn,
 				     const char *hyp_vecs_start,
@@ -121,7 +120,7 @@ static void  install_bp_hardening_cb(const struct arm64_cpu_capabilities *entry,
 	if (!entry->matches(entry))
 		return;
 
-	pfr0 = read_cpuid(ID_AA64PFR0_EL1);
+	pfr0 = read_cpuid(SYS_ID_AA64PFR0_EL1);
 	if (cpuid_feature_extract_unsigned_field(pfr0, ID_AA64PFR0_CSV2_SHIFT))
 		return;
 
@@ -184,7 +183,6 @@ static void enable_smccc_arch_workaround_1(void *data)
 	install_bp_hardening_cb(entry, cb, smccc_start, smccc_end);
 
 }
-
 #endif	/* CONFIG_HARDEN_BRANCH_PREDICTOR */
 
 #define MIDR_RANGE(model, min, max) \
@@ -243,6 +241,14 @@ const struct arm64_cpu_capabilities arm64_errata[] = {
 		MIDR_RANGE(MIDR_CORTEX_A53, 0x00, 0x04),
 	},
 #endif
+#ifdef CONFIG_ARM64_ERRATUM_855872
+	{
+	/* Cortex-A53 r0p[01234] */
+		.desc = "ARM erratum 855872",
+		.capability = ARM64_WORKAROUND_855872,
+		MIDR_RANGE(MIDR_CORTEX_A53, 0x00, 0x04),
+	},
+#endif
 #ifdef CONFIG_HARDEN_BRANCH_PREDICTOR
 	{
 		.capability = ARM64_HARDEN_BRANCH_PREDICTOR,
@@ -271,5 +277,10 @@ const struct arm64_cpu_capabilities arm64_errata[] = {
 
 void check_local_cpu_errata(void)
 {
-	check_cpu_capabilities(arm64_errata, "enabling workaround for");
+	update_cpu_capabilities(arm64_errata, "enabling workaround for");
+}
+
+void __init enable_errata_workarounds(void)
+{
+	enable_cpu_capabilities(arm64_errata);
 }

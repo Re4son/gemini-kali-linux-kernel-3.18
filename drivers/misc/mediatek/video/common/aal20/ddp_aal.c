@@ -75,9 +75,17 @@ static void set_aal_need_lock(int aal_need_lock);
 
 static DECLARE_WAIT_QUEUE_HEAD(g_aal_hist_wq);
 static DEFINE_SPINLOCK(g_aal_hist_lock);
+static DEFINE_SPINLOCK(g_aal_irq_en_lock);
+
 static DISP_AAL_HIST g_aal_hist = {
 	.serviceFlags = 0,
-	.backlight = -1
+	.backlight = -1,
+#ifdef AAL_SUPPORT_KERNEL_API
+	.essStrengthIndex = ESS_LEVEL_BY_CUSTOM_LIB,
+	.ess_enable = ESS_EN_BY_CUSTOM_LIB,
+	.dre_enable = DRE_EN_BY_CUSTOM_LIB
+#endif
+
 };
 static DISP_AAL_HIST g_aal_hist_db;
 static ddp_module_notify g_ddp_notify;
@@ -89,6 +97,11 @@ static volatile int g_aal_initialed;
 static atomic_t g_aal_allowPartial = ATOMIC_INIT(0);
 static volatile int g_led_mode = MT65XX_LED_MODE_NONE;
 static volatile int g_aal_need_lock;
+static atomic_t g_aal_force_enable_irq = ATOMIC_INIT(0);
+
+#ifdef AAL_SUPPORT_KERNEL_API
+static volatile unsigned int g_aal_panel_type = CONFIG_BY_CUSTOM_LIB;
+#endif
 
 static int disp_aal_get_cust_led(void)
 {
@@ -137,8 +150,6 @@ static int disp_aal_init(DISP_MODULE_ENUM module, int width, int height, void *c
 #ifdef CONFIG_MTK_AAL_SUPPORT
 	/* Enable AAL histogram, engine */
 	DISP_REG_MASK(cmdq, DISP_AAL_CFG, 0x3 << 1, (0x3 << 1) | 0x1);
-
-	disp_aal_write_init_regs(cmdq);
 #endif
 #if defined(CONFIG_ARCH_MT6797) || defined(CONFIG_ARCH_MT6757) /* disable stall cg for avoid display path hang */
 	DISP_REG_MASK(cmdq, DISP_AAL_CFG, 0x1 << 4, 0x1 << 4);
@@ -160,9 +171,8 @@ static int disp_aal_get_latency_lowerbound(void)
 
 	bwc_scen = smi_get_current_profile();
 	if (bwc_scen == SMI_BWC_SCEN_VR || bwc_scen == SMI_BWC_SCEN_SWDEC_VP ||
-		bwc_scen == SMI_BWC_SCEN_SWDEC_VP || bwc_scen == SMI_BWC_SCEN_VP ||
-		bwc_scen == SMI_BWC_SCEN_VR_SLOW || bwc_scen == SMI_BWC_SCEN_VP_HIGH_FPS ||
-		bwc_scen == SMI_BWC_SCEN_VP_HIGH_RESOLUTION)
+		bwc_scen == SMI_BWC_SCEN_VP || bwc_scen == SMI_BWC_SCEN_VR_SLOW ||
+		bwc_scen == SMI_BWC_SCEN_VP_HIGH_FPS || bwc_scen == SMI_BWC_SCEN_VP_HIGH_RESOLUTION)
 
 		aalrefresh = AAL_REFRESH_33MS;
 	else
@@ -240,7 +250,9 @@ static void disp_aal_notify_frame_dirty(void)
 	g_aal_dirty_frame_retrieved = 0;
 	spin_unlock_irqrestore(&g_aal_hist_lock, flags);
 
+	spin_lock_irqsave(&g_aal_irq_en_lock, flags);
 	disp_aal_set_interrupt(1);
+	spin_unlock_irqrestore(&g_aal_irq_en_lock, flags);
 #endif
 }
 
@@ -410,7 +422,7 @@ void disp_aal_notify_backlight_changed(int bl_1024)
 		/* AAL Service is not running */
 		backlight_brightness_set(bl_1024);
 	}
-	AAL_NOTICE("led_mode=%d , aal_need_lock=%d", g_led_mode, g_aal_need_lock);
+	AAL_DBG("led_mode=%d , aal_need_lock=%d", g_led_mode, g_aal_need_lock);
 
 	spin_lock_irqsave(&g_aal_hist_lock, flags);
 	g_aal_hist.backlight = bl_1024;
@@ -418,12 +430,31 @@ void disp_aal_notify_backlight_changed(int bl_1024)
 	spin_unlock_irqrestore(&g_aal_hist_lock, flags);
 
 	if (g_aal_is_init_regs_valid) {
+		spin_lock_irqsave(&g_aal_irq_en_lock, flags);
+		/* backlight change : irq can;t be disabled by user command  */
+		atomic_set(&g_aal_force_enable_irq, 1);
 		disp_aal_set_interrupt(1);
+		spin_unlock_irqrestore(&g_aal_irq_en_lock, flags);
+
 		/* Backlight latency should be as smaller as possible */
 		disp_aal_trigger_refresh(AAL_REFRESH_17MS);
 	}
 }
 
+void disp_aal_set_lcm_type(unsigned int panel_type)
+{
+#ifdef AAL_SUPPORT_KERNEL_API
+	unsigned long flags;
+
+	spin_lock_irqsave(&g_aal_hist_lock, flags);
+	g_aal_panel_type = panel_type;
+	spin_unlock_irqrestore(&g_aal_hist_lock, flags);
+
+	AAL_DBG("disp_aal_set_lcm_type: %d", g_aal_panel_type);
+#else
+	AAL_ERR("disp_aal_set_lcm_type not support");
+#endif
+}
 
 static int disp_aal_copy_hist_to_user(DISP_AAL_HIST __user *hist)
 {
@@ -433,6 +464,9 @@ static int disp_aal_copy_hist_to_user(DISP_AAL_HIST __user *hist)
 	/* We assume only one thread will call this function */
 
 	spin_lock_irqsave(&g_aal_hist_lock, flags);
+#ifdef AAL_CUSTOMER_GET_PANEL_TYPE
+	g_aal_hist.panel_type = g_aal_panel_type;
+#endif
 	memcpy(&g_aal_hist_db, &g_aal_hist, sizeof(DISP_AAL_HIST));
 	g_aal_hist.serviceFlags = 0;
 	g_aal_hist_available = 0;
@@ -440,6 +474,8 @@ static int disp_aal_copy_hist_to_user(DISP_AAL_HIST __user *hist)
 
 	if (copy_to_user(hist, &g_aal_hist_db, sizeof(DISP_AAL_HIST)) == 0)
 		ret = 0;
+
+	atomic_set(&g_aal_force_enable_irq, 0);
 
 	AAL_DBG("disp_aal_copy_hist_to_user: %d", ret);
 
@@ -534,7 +570,7 @@ int disp_aal_set_param(DISP_AAL_PARAM __user *param, void *cmdq)
 	if (ret == 0)
 		ret |= disp_pwm_set_backlight_cmdq(DISP_PWM0, backlight_value, cmdq);
 
-	AAL_DBG("disp_aal_set_param(CABC = %d, DRE[0,8] = %d,%d, latency=%d): ret = %d",
+	AAL_DBG("disp_aal_set_param(ESS = %d, DRE[0,8] = %d,%d, latency=%d): ret = %d",
 		g_aal_param.cabc_fltgain_force, g_aal_param.DREGainFltStatus[0],
 		g_aal_param.DREGainFltStatus[8], g_aal_param.refreshLatency, ret);
 
@@ -817,6 +853,7 @@ static int aal_ioctl(DISP_MODULE_ENUM module, void *handle,
 static int aal_io(DISP_MODULE_ENUM module, int msg, unsigned long arg, void *cmdq)
 {
 	int ret = 0;
+	unsigned long flags;
 
 	if (g_aal_io_mask != 0) {
 		AAL_DBG("aal_ioctl masked");
@@ -833,7 +870,13 @@ static int aal_io(DISP_MODULE_ENUM module, int msg, unsigned long arg, void *cmd
 				return -EFAULT;
 			}
 
+			spin_lock_irqsave(&g_aal_irq_en_lock, flags);
+			if (atomic_read(&g_aal_force_enable_irq) == 1) {
+				enabled = 1;
+				AAL_NOTICE("force enable aal irq");
+			}
 			disp_aal_set_interrupt(enabled);
+			spin_unlock_irqrestore(&g_aal_irq_en_lock, flags);
 
 			if (enabled)
 				disp_aal_trigger_refresh(AAL_REFRESH_33MS);
@@ -996,5 +1039,9 @@ void aal_test(const char *cmd, char *debug_output)
 		aal_bypass(AAL0_MODULE_NAMING, bypass);
 	} else if (strncmp(cmd, "ut:", 3) == 0) { /* debug command for UT */
 		aal_ut_cmd(cmd + 3);
+	} else if (strncmp(cmd, "lcm_type:", 9) == 0) {
+		unsigned int panel_type = cmd[9] - '0';
+
+		disp_aal_set_lcm_type(panel_type);
 	}
 }

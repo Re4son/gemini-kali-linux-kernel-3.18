@@ -13,7 +13,7 @@
             "aeon_lcd_bias_enp0", "aeon_lcd_bias_enp1", "aeon_lcd_bias_enn0", "aeon_lcd_bias_enn1",
             "sil9022_hpd_int", "fusb301a_sw_en_low", "fusb301a_sw_en_high", "fusb301a_sw_sel_low",
             "fusb301a_sw_sel_high", "sw7226_en_low", "sw7226_en_high", "usb1_drvvbus_low", "usb1_drvvbus_high",
-			"usb_det_low";
+			"usb_det_low","usb0_drvvbus_low", "usb0_drvvbus_high";
 
     pinctrl-0 = <&aeon_pins_default>;
 
@@ -39,9 +39,9 @@
     pinctrl-12 = <&aeon_pins_lcd_bias_enp0_gpio>;
     pinctrl-13 = <&aeon_pins_lcd_bias_enp1_gpio>;
     pinctrl-14 = <&aeon_pins_lcd_bias_enn0_gpio>;
-    pinctrl-15 = <&aeon_pins_lcd_bias_enn1_gpio>;	
-    
+    pinctrl-15 = <&aeon_pins_lcd_bias_enn1_gpio>;
     pinctrl-16 = <&aeon_pins_sil9022_hpd_int_gpio>;
+
     sil9022_hpd_int = <89>; /*GPIO PIN*/
     pinctrl-17 = <&aeon_pins_fusb301a_sw_en_low_gpio>;
     pinctrl-18 = <&aeon_pins_fusb301a_sw_en_high_gpio>;
@@ -49,11 +49,11 @@
     pinctrl-20 = <&aeon_pins_fusb301a_sw_sel_high_gpio>;
     pinctrl-21 = <&aeon_pins_sw7226_en_low_gpio>;
     pinctrl-22 = <&aeon_pins_sw7226_en_high_gpio>;
-    
     pinctrl-23 = <&aeon_pins_usb1_drvvbus_low_gpio>;
     pinctrl-24 = <&aeon_pins_usb1_drvvbus_high_gpio>;
-	pinctrl-25 = <&aeon_pins_usb_det_low_gpio>;
-    
+    pinctrl-25 = <&aeon_pins_usb_det_low_gpio>;
+    pinctrl-26 = <&aeon_pins_usb0_drvvbus_low_gpio>;
+    pinctrl-27 = <&aeon_pins_usb0_drvvbus_high_gpio>;
     status = "okay";
 };
 &pio {
@@ -201,15 +201,13 @@
 			output-low;
 		};
 	};
-	
 	aeon_pins_fusb301a_sw_sel_high_gpio:aeon@20 {
 		pins_cmd_dat {
 			pins = <PINMUX_GPIO71__FUNC_GPIO71>;
 			slew-rate = <1>;
 			output-high;
 		};
-	};
-		
+	};	
 	aeon_pins_sw7226_en_low_gpio:aeon@21 {
 		pins_cmd_dat {
 			pins = <PINMUX_GPIO72__FUNC_GPIO72>;
@@ -217,7 +215,7 @@
 			output-low;
 		};
 	};
-	
+
 	aeon_pins_sw7226_en_high_gpio:aeon@22 {
 		pins_cmd_dat {
 			pins = <PINMUX_GPIO72__FUNC_GPIO72>;
@@ -246,8 +244,24 @@
 		pins_cmd_dat {
 			pins = <PINMUX_GPIO237__FUNC_GPIO237>;
 			slew-rate = <0>;
-			bias-pull-down = <00>;		
-			input-enable;			
+			bias-pull-down = <00>;
+			input-enable;	
 		};
 	}; 
+
+	aeon_pins_usb0_drvvbus_low_gpio:aeon@26 {
+		pins_cmd_dat {
+			pins = <PINMUX_GPIO107__FUNC_GPIO107>;
+			slew-rate = <1>;
+			output-low;
+		};
+	};
+	
+	aeon_pins_usb0_drvvbus_high_gpio:aeon@27 {
+		pins_cmd_dat {
+			pins = <PINMUX_GPIO107__FUNC_GPIO107>;
+			slew-rate = <1>;
+			output-high;
+		};
+	};
 };

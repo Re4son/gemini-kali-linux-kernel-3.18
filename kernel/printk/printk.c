@@ -34,7 +34,6 @@
 #include <linux/memblock.h>
 #include <linux/aio.h>
 #include <linux/syscalls.h>
-#include <linux/suspend.h>
 #include <linux/kexec.h>
 #include <linux/kdb.h>
 #include <linux/ratelimit.h>
@@ -103,8 +102,11 @@ static int log_count;
 
 static int parse_log_file(void);
 
-inline void set_detect_count(int count)
+#endif
+
+void set_detect_count(int count)
 {
+#if defined(CONFIG_MT_ENG_BUILD) && defined(CONFIG_LOG_TOO_MUCH_WARNING)
 	if (count >= detect_count)
 		detect_count = count;
 	else {
@@ -115,23 +117,38 @@ inline void set_detect_count(int count)
 		detect_count_change = true;
 	}
 	pr_info("Printk too much criteria: %d  delay_flag: %d\n", detect_count, detect_count_change);
-}
-
-inline int get_detect_count(void)
-{
-	return detect_count;
-}
-
-inline void set_logtoomuch_enable(int value)
-{
-	printk_too_much_enable = value;
-}
-
-inline int get_logtoomuch_enable(void)
-{
-	return printk_too_much_enable;
-}
 #endif
+}
+EXPORT_SYMBOL(set_detect_count);
+
+int get_detect_count(void)
+{
+#if defined(CONFIG_MT_ENG_BUILD) && defined(CONFIG_LOG_TOO_MUCH_WARNING)
+	return detect_count;
+#else
+	return 0;
+#endif
+}
+EXPORT_SYMBOL(get_detect_count);
+
+void set_logtoomuch_enable(int value)
+{
+#if defined(CONFIG_MT_ENG_BUILD) && defined(CONFIG_LOG_TOO_MUCH_WARNING)
+	printk_too_much_enable = value;
+#endif
+}
+EXPORT_SYMBOL(set_logtoomuch_enable);
+
+int get_logtoomuch_enable(void)
+{
+#if defined(CONFIG_MT_ENG_BUILD) && defined(CONFIG_LOG_TOO_MUCH_WARNING)
+	return printk_too_much_enable;
+#else
+	return 0;
+#endif
+}
+EXPORT_SYMBOL(get_logtoomuch_enable);
+
 #ifdef CONFIG_EARLY_PRINTK_DIRECT
 extern void printascii(char *);
 #endif
@@ -162,7 +179,6 @@ int console_printk[4] = {
 	CONSOLE_LOGLEVEL_MIN,		/* minimum_console_loglevel */
 	CONSOLE_LOGLEVEL_DEFAULT,	/* default_console_loglevel */
 };
-EXPORT_SYMBOL_GPL(console_printk);
 
 /* Deferred messaged from sched code are marked by this special level */
 #define SCHED_MESSAGE_LOGLEVEL -2
@@ -2391,7 +2407,6 @@ void suspend_console(void)
 	console_suspended = 1;
 	up_console_sem();
 }
-EXPORT_SYMBOL_GPL(suspend_console);
 
 void resume_console(void)
 {
@@ -2401,7 +2416,6 @@ void resume_console(void)
 	console_suspended = 0;
 	console_unlock();
 }
-EXPORT_SYMBOL_GPL(resume_console);
 
 /**
  * console_cpu_notify - print deferred console messages after CPU hotplug

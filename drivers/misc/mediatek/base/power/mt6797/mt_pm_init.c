@@ -24,8 +24,8 @@
 #include <linux/types.h>
 /* #include <linux/xlog.h> */
 
-#include <asm/io.h>
-#include <asm/uaccess.h>
+#include <linux/io.h>
+#include <linux/uaccess.h>
 
 /* #include "mach/irqs.h" */
 #include <mt-plat/sync_write.h>

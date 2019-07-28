@@ -559,7 +559,8 @@ static ssize_t store_da9214_access(struct device *dev, struct device_attribute *
 		pvalue = (char *)buf;
 		if (size > 5) {
 			addr = strsep(&pvalue, " ");
-			ret = kstrtou32(addr, 16, (unsigned int *)&reg_address);
+			if (addr)
+				ret = kstrtou32(addr, 16, (unsigned int *)&reg_address);
 		} else
 			ret = kstrtou32(pvalue, 16, (unsigned int *)&reg_address);
 		/*ret = kstrtoul(buf, 16, (unsigned long *)&reg_address); */
@@ -567,7 +568,8 @@ static ssize_t store_da9214_access(struct device *dev, struct device_attribute *
 		if (size > 5) {
 			/*reg_value = simple_strtoul((pvalue + 1), NULL, 16); */
 			val = strsep(&pvalue, " ");
-			ret = kstrtou32(val, 16, (unsigned int *)&reg_value);
+			if (val)
+				ret = kstrtou32(val, 16, (unsigned int *)&reg_value);
 			pr_err("[store_da9214_access] write da9214 reg 0x%x with value 0x%x !\n",
 			       reg_address, reg_value);
 

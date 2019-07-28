@@ -965,7 +965,7 @@ static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 		if (rt_rq->rt_time) {
 			u64 runtime;
 			/* sched:get runtime*/
-			u64 runtime_pre, rt_time_pre;
+			u64 runtime_pre = 0, rt_time_pre = 0;
 
 			raw_spin_lock(&rt_rq->rt_runtime_lock);
 			per_cpu(old_rt_time, i) = rt_rq->rt_time;
@@ -1547,6 +1547,8 @@ select_task_rq_rt(struct task_struct *p, int cpu, int sd_flag, int flags)
 {
 	struct task_struct *curr;
 	struct rq *rq;
+	int this_cpu = smp_processor_id();
+	int sync = flags & WF_SYNC;
 
 	if (p->nr_cpus_allowed == 1)
 		goto out;
@@ -1554,6 +1556,15 @@ select_task_rq_rt(struct task_struct *p, int cpu, int sd_flag, int flags)
 	/* For anything but wake ups, just return the task_cpu */
 	if (sd_flag != SD_BALANCE_WAKE && sd_flag != SD_BALANCE_FORK)
 		goto out;
+
+	/* honors sync flag */
+	if (sync) {
+		cpumask_t search_cpus;
+
+		cpumask_and(&search_cpus, tsk_cpus_allowed(p), cpu_online_mask);
+		if (cpumask_test_cpu(this_cpu, &search_cpus))
+			return this_cpu;
+	}
 
 	rq = cpu_rq(cpu);
 
@@ -1837,12 +1848,13 @@ static int find_lowest_rq(struct task_struct *task)
 	int interop_cpu;
 #endif
 
-	mt_sched_printf(sched_rt_info,
-			"1 find_lowest_rq lowest_mask=0x%lx, task->cpus_allowed=0x%lx",
-			lowest_mask->bits[0], task->cpus_allowed.bits[0]);
 	/* Make sure the mask is initialized first */
 	if (unlikely(!lowest_mask))
 		return -1;
+
+	mt_sched_printf(sched_rt_info,
+			"1 find_lowest_rq lowest_mask=0x%lx, task->cpus_allowed=0x%lx",
+			lowest_mask->bits[0], task->cpus_allowed.bits[0]);
 
 	if (task->nr_cpus_allowed == 1)
 		return -1; /* No other targets possible */

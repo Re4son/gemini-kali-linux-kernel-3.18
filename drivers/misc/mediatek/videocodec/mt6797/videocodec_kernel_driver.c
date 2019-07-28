@@ -55,7 +55,6 @@
 #include <asm/io.h>
 #include <asm/sizes.h>
 #include "val_types_private.h"
-#include "hal_types_private.h"
 #include "val_api_private.h"
 #include "val_log.h"
 #include "drv_api.h"
@@ -1600,7 +1599,8 @@ static long vcodec_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned 
 			return -EFAULT;
 		}
 		if (rTempCoreLoading.CPUid < 0) {
-			MODULE_MFV_LOGE("[ERROR] rTempCoreLoading.CPUid(%d) < 0\n", rTempCoreLoading.CPUid);
+			MODULE_MFV_LOGE("[ERROR] rTempCoreLoading.CPUid(%d) < 0\n",
+			rTempCoreLoading.CPUid);
 			return -EFAULT;
 		}
 		rTempCoreLoading.Loading = get_cpu_load(rTempCoreLoading.CPUid);

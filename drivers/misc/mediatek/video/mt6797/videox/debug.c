@@ -89,7 +89,7 @@ static int primary_display_basic_test(int layer_num, int w, int h, DISP_FORMAT f
 	disp_session_input_config *input_config;
 	int session_id = MAKE_DISP_SESSION(DISP_SESSION_PRIMARY, 0);
 	unsigned int Bpp;
-	int frame, i, ret;
+	int frame, i, ret = 0;
 	enum UNIFIED_COLOR_FMT ufmt;
 
 	/* allocate buffer */
@@ -123,7 +123,12 @@ static int primary_display_basic_test(int layer_num, int w, int h, DISP_FORMAT f
 		static struct sg_table table;
 		struct sg_table *sg_table = &table;
 
-		sg_alloc_table(sg_table, 1, GFP_KERNEL);
+		ret = sg_alloc_table(sg_table, 1, GFP_KERNEL);
+		if (ret) {
+			DISPMSG("%s: sg_alloc_table failed\n", __func__);
+			kfree(input_config);
+			return -ENOMEM;
+		}
 
 		sg_dma_address(sg_table->sgl) = buf_pa;
 		sg_dma_len(sg_table->sgl) = size_align;
@@ -597,9 +602,7 @@ static void process_dbg_opt(const char *opt)
 			pr_err("DISP/%s: errno %d\n", __func__, ret);
 
 		DISPMSG("DDP: gTriggerDispMode=%d\n", gTriggerDispMode);
-	}
-
-	if (0 == strncmp(opt, "primary_basic_test:", 19)) {
+	} else if (0 == strncmp(opt, "primary_basic_test:", 19)) {
 		int layer_num, w, h, fmt, frame_num, vsync;
 
 		ret = sscanf(opt, "primary_basic_test:%d,%d,%d,%d,%d,%d\n",
@@ -617,9 +620,7 @@ static void process_dbg_opt(const char *opt)
 			fmt = DISP_FORMAT_RGB565;
 
 		primary_display_basic_test(layer_num, w, h, fmt, frame_num, vsync);
-	}
-
-	if (0 == strncmp(opt, "pan_disp_test:", 13)) {
+	} else if (0 == strncmp(opt, "pan_disp_test:", 13)) {
 		int frame_num;
 		int bpp;
 
@@ -630,9 +631,7 @@ static void process_dbg_opt(const char *opt)
 		}
 
 		pan_display_test(frame_num, bpp);
-	}
-
-	if (0 == strncmp(opt, "scenario:", 8)) {
+	} else if (0 == strncmp(opt, "scenario:", 8)) {
 		int scen;
 
 		ret = sscanf(opt, "scenario:%d\n", &scen);
@@ -641,10 +640,13 @@ static void process_dbg_opt(const char *opt)
 			return;
 		}
 		primary_display_set_scenario(scen);
+	} else if (strncmp(opt, "round_corner_offset_debug:", 26) == 0) {
+		if (strncmp(opt + 26, "on", 2) == 0)
+			round_corner_offset_enable = 1;
+		else if (strncmp(opt + 26, "off", 3) == 0)
+			round_corner_offset_enable = 0;
 	}
-
 }
-
 
 static void process_dbg_cmd(char *cmd)
 {
@@ -704,7 +706,6 @@ void debug_info_dump_to_printk(char *buf, int buf_len)
 static ssize_t debug_read(struct file *file, char __user *ubuf, size_t count, loff_t *ppos)
 {
 	int debug_bufmax;
-	char *str = "idlemgr disable mtcmos now, all the regs may 0x00000000\n";
 	static int n;
 
 	/* Debugfs read only fetch 4096 byte each time, thus whole ringbuffer need massive
@@ -719,10 +720,7 @@ static ssize_t debug_read(struct file *file, char __user *ubuf, size_t count, lo
 	n = debug_get_info(debug_buffer, debug_bufmax);
 	/* debug_info_dump_to_printk(); */
 out:
-	if (is_mipi_enterulps())
-		return simple_read_from_buffer(ubuf, count, ppos, str, strlen(str));
-	else
-		return simple_read_from_buffer(ubuf, count, ppos, debug_buffer, n);
+	return simple_read_from_buffer(ubuf, count, ppos, debug_buffer, n);
 }
 
 static ssize_t debug_write(struct file *file, const char __user *ubuf, size_t count, loff_t *ppos)

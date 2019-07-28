@@ -286,7 +286,7 @@ static int __ged_log_buf_write(GED_LOG_BUF *psGEDLogBuf, const char __user *pszB
 
 	buf[cnt] = 0;
 
-	__ged_log_buf_print(psGEDLogBuf, buf);
+	__ged_log_buf_print(psGEDLogBuf, "%s", buf);
 
 	return cnt;
 }
@@ -778,8 +778,7 @@ GED_ERROR ged_log_buf_print(GED_LOG_BUF_HANDLE hLogBuf, const char *fmt, ...)
 	GED_ERROR err;
 	GED_LOG_BUF *psGEDLogBuf;
 
-	if (hLogBuf)
-	{
+	if (hLogBuf) {
 		psGEDLogBuf = ged_log_buf_from_handle(hLogBuf);
 
 		va_start(args, fmt);
@@ -795,8 +794,7 @@ GED_ERROR ged_log_buf_print2(GED_LOG_BUF_HANDLE hLogBuf, int i32LogAttrs, const 
 	GED_ERROR err;
 	GED_LOG_BUF *psGEDLogBuf;
 
-	if (hLogBuf)
-	{
+	if (hLogBuf) {
 		psGEDLogBuf = ged_log_buf_from_handle(hLogBuf);
 
 		/* clear reserved attrs */

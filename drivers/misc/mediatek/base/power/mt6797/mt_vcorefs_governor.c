@@ -549,15 +549,14 @@ static int vcorefs_enable_vcore(bool enable)
 
 	gvrctrl->vcore_dvs = enable;
 
-	if (!gvrctrl->vcore_dvs && !gvrctrl->ddr_dfs) {
+	if (!gvrctrl->vcore_dvs && !gvrctrl->ddr_dfs)
 		spm_go_to_vcore_dvfs(SPM_FLAG_RUN_COMMON_SCENARIO | SPM_FLAG_DIS_VCORE_DVS | SPM_FLAG_DIS_VCORE_DFS, 0);
-	} else if (!gvrctrl->vcore_dvs && gvrctrl->ddr_dfs) {
+	else if (!gvrctrl->vcore_dvs && gvrctrl->ddr_dfs)
 		spm_go_to_vcore_dvfs(SPM_FLAG_RUN_COMMON_SCENARIO | SPM_FLAG_DIS_VCORE_DVS, 0);
-	} else if (gvrctrl->vcore_dvs && !gvrctrl->ddr_dfs) {
+	else if (gvrctrl->vcore_dvs && !gvrctrl->ddr_dfs)
 		spm_go_to_vcore_dvfs(SPM_FLAG_RUN_COMMON_SCENARIO | SPM_FLAG_DIS_VCORE_DFS, 0);
-	} else {
+	else
 		spm_go_to_vcore_dvfs(SPM_FLAG_RUN_COMMON_SCENARIO, 0);
-	}
 
 	mutex_unlock(&governor_mutex);
 	return 0;
@@ -571,15 +570,14 @@ static int vcorefs_enable_ddr(bool enable)
 
 	gvrctrl->ddr_dfs = enable;
 
-	if (!gvrctrl->vcore_dvs && !gvrctrl->ddr_dfs) {
+	if (!gvrctrl->vcore_dvs && !gvrctrl->ddr_dfs)
 		spm_go_to_vcore_dvfs(SPM_FLAG_RUN_COMMON_SCENARIO | SPM_FLAG_DIS_VCORE_DVS | SPM_FLAG_DIS_VCORE_DFS, 0);
-	} else if (gvrctrl->vcore_dvs && !gvrctrl->ddr_dfs) {
+	else if (gvrctrl->vcore_dvs && !gvrctrl->ddr_dfs)
 		spm_go_to_vcore_dvfs(SPM_FLAG_RUN_COMMON_SCENARIO | SPM_FLAG_DIS_VCORE_DFS, 0);
-	} else if (!gvrctrl->vcore_dvs && gvrctrl->ddr_dfs) {
+	else if (!gvrctrl->vcore_dvs && gvrctrl->ddr_dfs)
 		spm_go_to_vcore_dvfs(SPM_FLAG_RUN_COMMON_SCENARIO | SPM_FLAG_DIS_VCORE_DVS, 0);
-	} else {
+	else
 		spm_go_to_vcore_dvfs(SPM_FLAG_RUN_COMMON_SCENARIO, 0);
-	}
 
 	mutex_unlock(&governor_mutex);
 	return 0;

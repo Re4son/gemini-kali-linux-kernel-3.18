@@ -750,7 +750,7 @@ int sii70xx_device_init(struct device *dev, struct gpio *sk_gpios)
 	struct sii70xx_drv_context *drv_context;
 	struct sii_usbp_policy_engine *pusbpd_policy;
 	struct sii_usbpd_protocol *pusbpd_prtLyr;
-	bool ret = 0;
+	int ret = 0;
 
 	drv_context = kzalloc(sizeof(struct sii70xx_drv_context), GFP_KERNEL);
 	if (!drv_context)

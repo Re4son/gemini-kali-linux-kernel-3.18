@@ -144,9 +144,6 @@ ssize_t set_src_cap(struct device *dev, struct device_attribute *attr,
 	if (i == 0) {
 		pr_info("No bus_id specified\n");
 		goto exit_src_cap_data;
-	} else if (i == 0) {
-		pr_info("No data specified\n");
-		goto exit_src_cap_data;
 	} else {
 		if (down_interruptible(&drv_context->isr_lock)) {
 			status = -ERESTARTSYS;

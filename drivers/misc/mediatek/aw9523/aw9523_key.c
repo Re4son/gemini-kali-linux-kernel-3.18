@@ -410,6 +410,24 @@ static void aw9523_key_eint_work(struct work_struct *work) {
      * Rather than detect both keys, block both keys until either Control or L_Shift is
      * released, then detect the correct keypress. See youtu.be/L3ByBtM-w9I */
     if (memcmp(keyst_old, keyst_new, P1_NUM_MAX)) {    // keyst changed
+
+        // Special cases for ctrl+shift with z/x/c/v clear unlikely combination
+        if (((keyst_new[KROW_P1_6] & (1 << KROW_P0_3)) == 0) && //l_shift
+            ((keyst_new[KROW_P1_6] & (1 << KROW_P0_4)) == 0)) { //ctrl
+            if ((keyst_new[KROW_P1_0] & (1 << KROW_P0_3)) == 0) { //z
+                keyst_new[KROW_P1_0] |= (1 << KROW_P0_4); // -/
+            }
+            if ((keyst_new[KROW_P1_3] & (1 << KROW_P0_3)) == 0) { //x
+                keyst_new[KROW_P1_3] |= (1 << KROW_P0_4); // -fn
+            }
+            if ((keyst_new[KROW_P1_1] & (1 << KROW_P0_3)) == 0) { //c
+                keyst_new[KROW_P1_1] |= (1 << KROW_P0_4); // -alt
+            }
+            if ((keyst_new[KROW_P1_4] & (1 << KROW_P0_3)) == 0) { //v
+                keyst_new[KROW_P1_4] |= (1 << KROW_P0_4); // -space
+            }
+        }
+
         val = P0_KROW_MASK; // The distinct columns used
         y = 0;
         update_now = true; // Now by default, do the update since keyst changed.

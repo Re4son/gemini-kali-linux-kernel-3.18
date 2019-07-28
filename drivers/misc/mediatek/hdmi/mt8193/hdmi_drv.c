@@ -175,7 +175,7 @@ static void mt8193_get_params(struct HDMI_PARAMS *params)
 {
 	enum HDMI_VIDEO_RESOLUTION input_resolution;
 
-	input_resolution = params->init_config.vformat;
+	input_resolution = params->init_config.vformat - 2;
 	memset(params, 0, sizeof(struct HDMI_PARAMS));
 
 	switch (input_resolution) {

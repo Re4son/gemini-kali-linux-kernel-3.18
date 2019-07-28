@@ -22,12 +22,12 @@ static int tpd_keys_dim[TPD_VIRTUAL_KEY_MAX][4];	/* = {0}; */
 static ssize_t mtk_virtual_keys_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	int i, j;
-
-	for (i = 0, j = 0; i < tpd_keycnt; i++)
-		j += sprintf(buf, "%s%s:%d:%d:%d:%d:%d%s", buf,
+	for (i = 0, j = 0; i < tpd_keycnt; i++) {
+		j += sprintf(buf+j, "%s:%d:%d:%d:%d:%d%s",
 			     __stringify(EV_KEY), tpd_keys[i],
 			     tpd_keys_dim[i][0], tpd_keys_dim[i][1],
 			     tpd_keys_dim[i][2], tpd_keys_dim[i][3], (i == tpd_keycnt - 1 ? "\n" : ":"));
+		}
 	return j;
 }
 

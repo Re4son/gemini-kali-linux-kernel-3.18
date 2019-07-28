@@ -227,6 +227,10 @@ static int zcomp_strm_multi_create(struct zcomp *comp, int max_strm)
 static struct zcomp_strm *zcomp_strm_single_find(struct zcomp *comp)
 {
 	struct zcomp_strm_single *zs = comp->stream;
+
+	if (!zs)
+		return NULL;
+
 	mutex_lock(&zs->strm_lock);
 	return zs->zstrm;
 }
@@ -249,6 +253,10 @@ static void zcomp_strm_single_destroy(struct zcomp *comp)
 	struct zcomp_strm_single *zs = comp->stream;
 	zcomp_strm_free(comp, zs->zstrm);
 	kfree(zs);
+
+	/* Nullify the pointer & dump backtrace */
+	comp->stream = NULL;
+	dump_stack();
 }
 
 static int zcomp_strm_single_create(struct zcomp *comp)
@@ -268,6 +276,10 @@ static int zcomp_strm_single_create(struct zcomp *comp)
 	zs->zstrm = zcomp_strm_alloc(comp);
 	if (!zs->zstrm) {
 		kfree(zs);
+
+		/* Nullify the pointer & dump backtrace */
+		comp->stream = NULL;
+		dump_stack();
 		return -ENOMEM;
 	}
 	return 0;

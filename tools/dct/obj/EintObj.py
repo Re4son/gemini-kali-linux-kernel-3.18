@@ -1,6 +1,17 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 
+# Copyright (C) 2016 MediaTek Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+
 import re
 import os
 import string
@@ -291,5 +302,21 @@ class EintObj(ModuleObj):
             gen_str += '''\n'''
 
         return gen_str
+
+class EintObj_MT6750S(EintObj):
+    def __init__(self, gpio_obj):
+        EintObj.__init__(self, gpio_obj)
+
+    def parse(self, node):
+        EintObj.parse(self, node)
+
+    def gen_files(self):
+        EintObj.gen_files(self)
+
+    def gen_spec(self, para):
+        EintObj.gen_spec(self, para)
+
+    def fill_mappingTable(self):
+        return ''
 
 

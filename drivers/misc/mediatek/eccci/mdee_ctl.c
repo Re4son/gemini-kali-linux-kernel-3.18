@@ -142,7 +142,11 @@ void mdee_monitor_func(struct md_ee *mdee)
 
 #if defined(CONFIG_MTK_AEE_FEATURE)
 	CCCI_NORMAL_LOG(md_id, KERN, "MD exception timer 1:disable tracing\n");
-	tracing_off();
+	if (get_ee_stop_tracing_en()) {
+		CCCI_NOTICE_LOG(md_id, KERN, "MD exception stop tracing\n");
+		tracing_off();
+	} else
+		CCCI_NOTICE_LOG(md_id, KERN, "MD exception don't stop tracing\n");
 #endif
 
 	CCCI_MEM_LOG_TAG(md_id, KERN, "MD exception timer 1! ee=%x\n", mdee->ee_info_flag);

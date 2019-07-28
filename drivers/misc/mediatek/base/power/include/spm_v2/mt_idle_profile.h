@@ -41,6 +41,7 @@ struct mt_idle_buf {
 	do { scnprintf((idle).p_idx, (idle).buf + IDLE_LOG_BUF_LEN - 1 - (idle).p_idx, fmt, ##args); \
 	(idle).p_idx += strlen((idle).p_idx); } while (0)
 
+
 extern const char *reason_name[NR_REASONS];
 
 void mt_idle_twam_callback(struct twam_sig *ts);

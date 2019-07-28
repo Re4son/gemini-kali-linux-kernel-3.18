@@ -40,6 +40,8 @@ mtk_wcn_cmb_stub_query_ctrl(void)
 /*=============================================================*/
 static kuid_t uid = KUIDT_INIT(0);
 static kgid_t gid = KGIDT_INIT(1000);
+static DEFINE_SEMAPHORE(sem_mutex);
+static int isTimerCancelled;
 
 static int wmt_tm_debug_log;
 #define wmt_tm_dprintk(fmt, args...)   \
@@ -1477,6 +1479,8 @@ static ssize_t wmt_tm_write(struct file *filp, const char __user *buf, size_t co
 	     &ptr_tm_data->time_msec) == 32) {
 
 		/* unregister */
+		down(&sem_mutex);
+		wmt_tm_dprintk("[%s] mtktswmt unregister thermal\n", __func__);
 		if (p_linux_if->thz_dev) {
 			mtk_thermal_zone_device_unregister(p_linux_if->thz_dev);
 			p_linux_if->thz_dev = NULL;
@@ -1487,6 +1491,7 @@ static ssize_t wmt_tm_write(struct file *filp, const char __user *buf, size_t co
 					"Bad argument");
 			wmt_tm_info("[%s] bad argument = %s\n", __func__, ptr_tm_data->desc);
 			kfree(ptr_tm_data);
+			up(&sem_mutex);
 			return -EINVAL;
 		}
 
@@ -1545,9 +1550,12 @@ static ssize_t wmt_tm_write(struct file *filp, const char __user *buf, size_t co
 		/* thermal_zone_device_update(p_linux_if->thz_dev); */
 
 		/* register */
+		wmt_tm_dprintk("[%s] mtktswmt register thermal\n", __func__);
 		p_linux_if->thz_dev = mtk_thermal_zone_device_register("mtktswmt", g_num_trip, NULL,
 								       &wmt_thz_dev_ops, 0, 0, 0,
 								       p_linux_if->interval);
+
+		up(&sem_mutex);
 
 		wmt_tm_dprintk("[wmt_tm_write] time_ms=%d\n", p_linux_if->interval);
 
@@ -1579,8 +1587,16 @@ void mtkts_wmt_cancel_thermal_timer(void)
 	/* pr_debug("mtkts_wmt_cancel_thermal_timer\n"); */
 
 	/* stop thermal framework polling when entering deep idle */
-	if (p_linux_if->thz_dev)
+
+	if (down_trylock(&sem_mutex))
+		return;
+
+	if (p_linux_if->thz_dev) {
 		cancel_delayed_work(&(p_linux_if->thz_dev->poll_queue));
+		isTimerCancelled = 1;
+	}
+
+	up(&sem_mutex);
 }
 
 void mtkts_wmt_start_thermal_timer(void)
@@ -1596,9 +1612,20 @@ void mtkts_wmt_start_thermal_timer(void)
 
 	/* pr_debug("mtkts_wmt_start_thermal_timer\n"); */
 	/* resume thermal framework polling when leaving deep idle */
-	if (p_linux_if->thz_dev != NULL && p_linux_if->interval != 0)
+
+	if (!isTimerCancelled)
+		return;
+
+	if (down_trylock(&sem_mutex))
+		return;
+
+	if (p_linux_if->thz_dev != NULL && p_linux_if->interval != 0) {
 		mod_delayed_work(system_freezable_wq, &(p_linux_if->thz_dev->poll_queue),
-				 round_jiffies(msecs_to_jiffies(2000)));
+			round_jiffies(msecs_to_jiffies(2000)));
+		isTimerCancelled = 0;
+	}
+
+	up(&sem_mutex);
 }
 
 static const struct file_operations _wmt_tm_fops = {

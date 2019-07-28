@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 MICROTRUST Incorporated
+ * Copyright (c) 2015-2017 MICROTRUST Incorporated
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -21,28 +21,28 @@
 #include "nt_smc_call.h"
 #include "backward_driver.h"
 #include "teei_id.h"
-
-#define IMSG_TAG "[tz_driver]"
+#include "sched_status.h"
+#include "utdriver_macro.h"
+#include "teei_common.h"
+#include "switch_queue.h"
+#include "teei_client_main.h"
+#include <linux/time.h>
 #include <imsg_log.h>
-#define BDRV_CALL       0x03
-
-#define VFS_SYS_NO      0x08
-#define REETIME_SYS_NO  0x07
-#define GLSCH_LOW      0x01
 
 struct bdrv_call_struct {
 	int bdrv_call_type;
 	struct service_handler *handler;
 	int retVal;
 };
-extern int forward_call_flag;
-extern int add_work_entry(int work_type, unsigned char *buff);
+
 static long register_shared_param_buf(struct service_handler *handler);
+unsigned char *daulOS_VFS_share_mem = NULL;
+static unsigned char *vfs_flush_address;
+struct service_handler reetime;
 
 void set_ack_vdrv_cmd(unsigned int sys_num)
 {
 	if (boot_soter_flag == START_STATUS) {
-
 		struct message_head msg_head;
 		struct ack_vdrv_struct ack_body;
 
@@ -55,8 +55,9 @@ void set_ack_vdrv_cmd(unsigned int sys_num)
 
 		ack_body.sysno = sys_num;
 
-                memcpy((void *)message_buff, (void *)(&msg_head), sizeof(struct message_head));
-                memcpy((void *)(message_buff + sizeof(struct message_head)), (void *)(&ack_body), sizeof(struct ack_vdrv_struct));
+		memcpy((void *)message_buff, (void *)(&msg_head), sizeof(struct message_head));
+		memcpy((void *)(message_buff + sizeof(struct message_head)),
+			(void *)(&ack_body), sizeof(struct ack_vdrv_struct));
 
 		Flush_Dcache_By_Area((unsigned long)message_buff, (unsigned long)message_buff + MESSAGE_SIZE);
 	} else {
@@ -64,29 +65,22 @@ void set_ack_vdrv_cmd(unsigned int sys_num)
 		Flush_Dcache_By_Area((unsigned long)bdrv_message_buff, (unsigned long)bdrv_message_buff + MESSAGE_SIZE);
 	}
 
-	return;
 }
-
-
 
 void secondary_invoke_fastcall(void *info)
 {
-	unsigned long smc_type = 2;
-	n_invoke_t_fast_call((uint64_t *)(&smc_type), 0, 0);
+	uint64_t smc_type = 2;
 
-	while (smc_type == 0x54){
-		udelay(IRQ_DELAY);
-		nt_sched_t((uint64_t *)(&smc_type));
-	}
-	return;
+	n_invoke_t_fast_call(&smc_type, 0, 0);
+
+	while (smc_type == 0x54)
+		nt_sched_t(&smc_type);
 }
-
 
 void invoke_fastcall(void)
 {
-  forward_call_flag = GLSCH_LOW;
+	forward_call_flag = GLSCH_LOW;
 	add_work_entry(INVOKE_FASTCALL, NULL);
-	return;
 }
 
 static long register_shared_param_buf(struct service_handler *handler)
@@ -108,11 +102,12 @@ static long register_shared_param_buf(struct service_handler *handler)
 	}
 
 #ifdef UT_DMA_ZONE
-	handler->param_buf = (void *)__get_free_pages(GFP_KERNEL | GFP_DMA, get_order(ROUND_UP(handler->size, SZ_4K)));
+	handler->param_buf = (void *) __get_free_pages(GFP_KERNEL | GFP_DMA, get_order(ROUND_UP(handler->size, SZ_4K)));
 #else
-	handler->param_buf = (void *)__get_free_pages(GFP_KERNEL, get_order(ROUND_UP(handler->size, SZ_4K)));
+	handler->param_buf = (void *) __get_free_pages(GFP_KERNEL, get_order(ROUND_UP(handler->size, SZ_4K)));
 #endif
-	if ((unsigned char *)(handler->param_buf) == NULL) {
+
+	if (handler->param_buf == NULL) {
 		IMSG_ERROR("[%s][%d]: kmalloc vdrv_buffer failed.\n", __FILE__, __LINE__);
 		return -ENOMEM;
 	}
@@ -125,29 +120,30 @@ static long register_shared_param_buf(struct service_handler *handler)
 	msg_head.message_type = FAST_CALL_TYPE;
 	msg_head.child_type = FAST_CREAT_VDRV;
 	msg_head.param_length = sizeof(struct create_vdrv_struct);
-
 	msg_body.vdrv_type = handler->sysno;
 	msg_body.vdrv_phy_addr = virt_to_phys(handler->param_buf);
 	msg_body.vdrv_size = handler->size;
 
-	//local_irq_save(irq_flag);
-
 	/* Notify the T_OS that there is ctl_buffer to be created. */
 	memcpy((void *)message_buff, (void *)(&msg_head), sizeof(struct message_head));
-	memcpy((void *)(message_buff + sizeof(struct message_head)), (void *)(&msg_body), sizeof(struct create_vdrv_struct));
+	memcpy((void *)(message_buff + sizeof(struct message_head)),
+				(void *)(&msg_body), sizeof(struct create_vdrv_struct));
 	Flush_Dcache_By_Area((unsigned long)message_buff, (unsigned long)message_buff + MESSAGE_SIZE);
 
+	/* get_online_cpus(); */
 	down(&(smc_lock));
 
 	invoke_fastcall();
 
 	down(&(boot_sema));
+	/* put_online_cpus(); */
 
 	Invalidate_Dcache_By_Area((unsigned long)message_buff, (unsigned long)message_buff + MESSAGE_SIZE);
 	memcpy((void *)(&msg_head), (void *)(message_buff), sizeof(struct message_head));
-	memcpy((void *)(&msg_ack), (void *)(message_buff + sizeof(struct message_head)), sizeof(struct ack_fast_call_struct));
+	memcpy((void *)(&msg_ack), (void *)(message_buff + sizeof(struct message_head)),
+				sizeof(struct ack_fast_call_struct));
 
-	//local_irq_restore(irq_flag);
+	/*local_irq_restore(irq_flag);*/
 
 	/* Check the response from T_OS. */
 	if ((msg_head.message_type == FAST_CALL_TYPE) && (msg_head.child_type == FAST_ACK_CREAT_VDRV)) {
@@ -160,16 +156,14 @@ static long register_shared_param_buf(struct service_handler *handler)
 	}
 
 	/* Release the resource and return. */
-	free_pages((unsigned long)handler->param_buf, get_order(ROUND_UP(handler->size, SZ_4K)));
+	free_pages((unsigned long)(handler->param_buf), get_order(ROUND_UP(handler->size, SZ_4K)));
 	handler->param_buf = NULL;
 
 	return retVal;
 }
 
 /******************************TIME**************************************/
-#include <linux/time.h>
 
-struct service_handler reetime;
 static long reetime_init(struct service_handler *handler)
 {
 	return register_shared_param_buf(handler);
@@ -177,7 +171,7 @@ static long reetime_init(struct service_handler *handler)
 
 static void reetime_deinit(struct service_handler *handler)
 {
-	return;
+
 }
 
 int __reetime_handle(struct service_handler *handler)
@@ -186,7 +180,7 @@ int __reetime_handle(struct service_handler *handler)
 	void *ptr = NULL;
 	int tv_sec;
 	int tv_usec;
-	unsigned long smc_type = 2;
+	uint64_t smc_type = 2;
 
 	do_gettimeofday(&tv);
 	ptr = handler->param_buf;
@@ -198,15 +192,12 @@ int __reetime_handle(struct service_handler *handler)
 	Flush_Dcache_By_Area((unsigned long)handler->param_buf, (unsigned long)handler->param_buf + handler->size);
 
 	set_ack_vdrv_cmd(handler->sysno);
-	n_ack_t_invoke_drv((uint64_t *)(&smc_type), 0, 0);
-	while(smc_type == 0x54) {
-		udelay(IRQ_DELAY);
-		nt_sched_t((uint64_t *)(&smc_type));
-	}
+	n_ack_t_invoke_drv(&smc_type, 0, 0);
+	while (smc_type == 0x54)
+		nt_sched_t(&smc_type);
 
 	return 0;
 }
-
 
 static int reetime_handle(struct service_handler *handler)
 {
@@ -215,19 +206,22 @@ static int reetime_handle(struct service_handler *handler)
 
 	down(&smc_lock);
 
-	reetime_bdrv_ent = (struct bdrv_call_struct *)kmalloc(sizeof(struct bdrv_call_struct), GFP_KERNEL);
+	reetime_bdrv_ent = kmalloc(sizeof(struct bdrv_call_struct), GFP_KERNEL);
 	reetime_bdrv_ent->handler = handler;
 	reetime_bdrv_ent->bdrv_call_type = REETIME_SYS_NO;
 	/* with a wmb() */
 	wmb();
 
 	retVal = add_work_entry(BDRV_CALL, (unsigned char *)(reetime_bdrv_ent));
+
 	if (retVal != 0) {
 		up(&smc_lock);
 		return retVal;
 	}
+
 	/* with a rmb() */
 	rmb();
+
 	return 0;
 }
 
@@ -241,8 +235,9 @@ static unsigned long buff_vaddr;
 
 int vfs_thread_function(unsigned long virt_addr, unsigned long para_vaddr, unsigned long buff_vaddr)
 {
-	Invalidate_Dcache_By_Area(virt_addr, virt_addr + VFS_SIZE);
+	Invalidate_Dcache_By_Area((unsigned long)virt_addr, virt_addr + VFS_SIZE);
 	daulOS_VFS_share_mem = (unsigned char *)virt_addr;
+
 #ifdef VFS_RDWR_SEM
 	up(&VFS_rd_sem);
 	down_interruptible(&VFS_wr_sem);
@@ -250,6 +245,7 @@ int vfs_thread_function(unsigned long virt_addr, unsigned long para_vaddr, unsig
 	complete(&VFS_rd_comp);
 	wait_for_completion_interruptible(&VFS_wr_comp);
 #endif
+
 	return 0;
 }
 
@@ -265,49 +261,47 @@ static long vfs_init(struct service_handler *handler) /*! init service */
 
 static void vfs_deinit(struct service_handler *handler) /*! stop service  */
 {
-	return;
+
 }
 
 int __vfs_handle(struct service_handler *handler) /*! invoke handler */
 {
-	unsigned long smc_type = 2;
+	uint64_t smc_type = 2;
+
 	Flush_Dcache_By_Area((unsigned long)handler->param_buf, (unsigned long)handler->param_buf + handler->size);
 
 	set_ack_vdrv_cmd(handler->sysno);
-	n_ack_t_invoke_drv((uint64_t *)(&smc_type), 0, 0);
+	n_ack_t_invoke_drv(&smc_type, 0, 0);
 
-	while(smc_type == 0x54) {
-		udelay(IRQ_DELAY);
-		nt_sched_t((uint64_t *)(&smc_type));
-	}
+	while (smc_type == 0x54)
+		nt_sched_t(&smc_type);
 
 	return 0;
 }
 
-
 static int vfs_handle(struct service_handler *handler)
 {
-
 	int retVal = 0;
 
 	struct bdrv_call_struct *vfs_bdrv_ent = NULL;
 
-	vfs_thread_function((unsigned long)handler->param_buf, para_vaddr, buff_vaddr);
+	vfs_thread_function((unsigned long)(handler->param_buf), para_vaddr, buff_vaddr);
+
 	down(&smc_lock);
-	vfs_bdrv_ent = (struct bdrv_call_struct *)kmalloc(sizeof(struct bdrv_call_struct), GFP_KERNEL);
+	vfs_bdrv_ent = kmalloc(sizeof(struct bdrv_call_struct), GFP_KERNEL);
 	vfs_bdrv_ent->handler = handler;
 	vfs_bdrv_ent->bdrv_call_type = VFS_SYS_NO;
-
 	/* with a wmb() */
 	wmb();
 
-	Flush_Dcache_By_Area((unsigned long)vfs_bdrv_ent, (unsigned long)vfs_bdrv_ent + sizeof(struct bdrv_call_struct));
+	Flush_Dcache_By_Area((unsigned long)vfs_bdrv_ent,
+						(unsigned long)vfs_bdrv_ent + sizeof(struct bdrv_call_struct));
 	retVal = add_work_entry(BDRV_CALL, (unsigned char *)(vfs_bdrv_ent));
+
 	if (retVal != 0) {
 		up(&smc_lock);
 		return retVal;
 	}
-
 
 	/* with a rmb() */
 	rmb();

@@ -30,4 +30,8 @@ int seeprom_firmware_update(struct solomon_device *dev,
 int seeprom_firmware_pre_boot_up_check(struct solomon_device *dev,
 		struct solomon_fw_group_header *fw_header);
 int seeprom_get_version_boot(struct solomon_device *dev);
+
+int ds16_seeprom_read_nbyte(struct solomon_device *dev, u32 st, u8 *data_buf,
+		int nbyte);
+
 #endif

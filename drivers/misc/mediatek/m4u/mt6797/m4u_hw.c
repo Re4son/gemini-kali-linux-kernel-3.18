@@ -256,7 +256,7 @@ int config_mau(M4U_MAU_STRUCT mau)
 	if (0 != m4u_id)
 		return -1;
 
-	if (port_id >= M4U_PORT_UNKNOWN || larb == -1)
+	if (port_id >= M4U_LARB_PORT_NR || larb == -1)
 		return -1;
 
 	for (i = 0; i < M4U0_MAU_NR; i++) {
@@ -1451,8 +1451,8 @@ static int _m4u_config_port(int port, int virt, int sec, int dis, int dir)
 
 		larb = m4u_port_2_larb_id(port);
 		larb_port = m4u_port_2_larb_port(port);
-
-		if (larb_port >= M4U_PORT_UNKNOWN || larb == -1)
+		/*larb_port : 8 bit*/
+		if (larb_port > M4U_LARB_PORT_NR || larb == -1)
 			return -1;
 
 		larb_base = gLarbBaseAddr[larb];
@@ -1485,8 +1485,8 @@ static int _m4u_config_port(int port, int virt, int sec, int dis, int dir)
 		spin_unlock(&gM4u_reg_lock);
 	} else {
 		larb_port = m4u_port_2_larb_port(port);
-
-		if (larb_port >= M4U_PORT_UNKNOWN)
+		/*larb_port : 8 bit*/
+		if (larb_port > M4U_LARB_PORT_NR)
 			return -1;
 
 		spin_lock(&gM4u_reg_lock);
@@ -1541,8 +1541,8 @@ int m4u_config_port(M4U_PORT_STRUCT *pM4uPort)	/* native */
 	m4u_index = m4u_port_2_m4u_id(PortID);
 	larb = m4u_port_2_larb_id(PortID);
 	larb_port = m4u_port_2_larb_port(PortID);
-
-	if (larb_port >= M4U_PORT_UNKNOWN || larb == -1 || m4u_index == -1)
+	/*larb_port : 8 bit*/
+	if (larb_port > M4U_LARB_PORT_NR || larb == -1 || m4u_index == -1)
 		return -1;
 
 	_m4u_port_clock_toggle(m4u_index, larb, 1);
@@ -2006,8 +2006,8 @@ void m4u_print_port_status(struct seq_file *seq, int only_print_active)
 		if (m4u_index == 0) {
 			larb = m4u_port_2_larb_id(port);
 			larb_port = m4u_port_2_larb_port(port);
-
-			if (larb_port >= M4U_PORT_UNKNOWN || larb == -1)
+			/*larb_port : 8 bit*/
+			if (larb_port > M4U_LARB_PORT_NR || larb == -1)
 				continue;
 
 			larb_base = gLarbBaseAddr[larb];
@@ -2021,8 +2021,8 @@ void m4u_print_port_status(struct seq_file *seq, int only_print_active)
 
 		} else {
 			larb_port = m4u_port_2_larb_port(port);
-
-			if (larb_port >= M4U_PORT_UNKNOWN)
+			/*larb_port : 8 bit*/
+			if (larb_port > M4U_LARB_PORT_NR)
 				continue;
 
 			mmu_en =
@@ -2193,11 +2193,6 @@ irqreturn_t MTK_M4U_isr(int irq, void *dev_id)
 	if (irq == gM4uDev->irq_num[0]) {
 		m4u_base = gM4UBaseAddr[0];
 		m4u_index = 0;
-/* These array indexes are out of range, how can this code ever work, best to give an error message
-	} else if (irq == gM4uDev->irq_num[1]) {
-		m4u_base = gM4UBaseAddr[1];
-		m4u_index = 1;
-*/
 	} else {
 		M4UMSG("MTK_M4U_isr(), Invalid irq number %d\n", irq);
 		return -1;

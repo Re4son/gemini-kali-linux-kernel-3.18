@@ -64,7 +64,7 @@ static irqreturn_t __cpuxgpt7_irq_handler(int irq, void *dev_id);
 static irqreturn_t __cpuxgpt8_irq_handler(int irq, void *dev_id);
 static irqreturn_t __cpuxgpt9_irq_handler(int irq, void *dev_id);
 
-static const struct of_device_id cpuxgpt_addr_ids[] __initconst = {
+static const struct of_device_id cpuxgpt_addr_ids[] = {
 	{.compatible = "mediatek,mt6797-cpuxgpt"},
 	{},
 };
@@ -441,7 +441,8 @@ int cpu_xgpt_register_timer(unsigned int id, irqreturn_t (*func)(int irq, void *
 
 		/*cpuxgpt assigne  for per core*/
 #if defined(CONFIG_MTK_GIC) || defined(CONFIG_ARM_GIC_V3)
-		irq_force_affinity(irq_id, cpumask_of((irq_id - CPUXGPT_IRQID_BASE)%num_possible_cpus()));
+		if (num_possible_cpus())
+			irq_force_affinity(irq_id, cpumask_of((irq_id - CPUXGPT_IRQID_BASE)%num_possible_cpus()));
 #else
 		mt_gic_cfg_irq2cpu(irq_id, 0, 0);/*don't trigger IRQ to CPU0*/
 		/*trigger IRQ to CPUx*/

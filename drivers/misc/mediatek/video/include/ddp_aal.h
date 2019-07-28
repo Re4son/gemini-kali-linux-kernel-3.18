@@ -14,15 +14,41 @@
 #ifndef __DDP_AAL_H__
 #define __DDP_AAL_H__
 
+#if defined(CONFIG_ARCH_MT6755)
+#define AAL_SUPPORT_KERNEL_API            (1)
+#endif
+
 #define AAL_HIST_BIN        33	/* [0..32] */
 #define AAL_DRE_POINT_NUM   29
 
 #define AAL_SERVICE_FORCE_UPDATE 0x1
 
+enum AAL_ESS_UD_MODE {
+	CONFIG_BY_CUSTOM_LIB = 0,
+	CONFIG_TO_LCD = 1,
+	CONFIG_TO_AMOLED = 2
+};
+
+enum AAL_DRE_MODE {
+	DRE_EN_BY_CUSTOM_LIB = 0xFFFF,
+	DRE_OFF = 0,
+	DRE_ON = 1
+};
+
+enum AAL_ESS_MODE {
+	ESS_EN_BY_CUSTOM_LIB = 0xFFFF,
+	ESS_OFF = 0,
+	ESS_ON = 1
+};
+
+enum AAL_ESS_LEVEL {
+	ESS_LEVEL_BY_CUSTOM_LIB = 0xFFFF
+};
+
 typedef struct {
 	/* DRE */
 	int dre_map_bypass;
-	/* CABC */
+	/* ESS */
 	int cabc_gainlmt[33];
 } DISP_AAL_INITREG;
 
@@ -32,6 +58,13 @@ typedef struct {
 	int colorHist;
 	unsigned int maxHist[AAL_HIST_BIN];
 	int requestPartial;
+#ifdef AAL_SUPPORT_KERNEL_API
+	unsigned int panel_type;
+	int essStrengthIndex;
+	int ess_enable;
+	int dre_enable;
+#endif
+
 } DISP_AAL_HIST;
 
 enum DISP_AAL_REFRESH_LATENCY {
@@ -59,5 +92,7 @@ int aal_request_partial_support(int partial);
 void disp_aal_notify_backlight_changed(int bl_1024);
 
 int aal_is_need_lock(void);
+
+void disp_aal_set_lcm_type(unsigned int panel_type);
 
 #endif
